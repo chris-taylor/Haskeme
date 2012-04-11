@@ -20,6 +20,13 @@ main = do
     args <- getArgs
     putStrLn (readExpr (args !! 0))
 
+-- Functions
+
+readExpr :: String -> String
+readExpr input = case parse parseExpr "lisp" input of
+    Left err -> "No match: " ++ show err
+    Right val -> "Found value"
+
 -- Parsers
 
 symbol :: Parser Char
@@ -46,11 +53,19 @@ parseAtom = do
         _    -> Atom atom
 
 parseNumber :: Parser LispVal
-parseNumber = liftM (Number . read) $ many1 digit
+parseNumber = do
+    digits <- many1 digit
+    return $ Number (read digits)
 
--- Functions
+parseExpr :: Parser LispVal
+parseExpr = parseAtom <|> parseString <|> parseNumber
 
-readExpr :: String -> String
-readExpr input = case parse (spaces >> symbol) "lisp" input of
-    Left err -> "No match: " ++ show err
-    Right val -> "Found value"
+parseList :: Parser LispVal
+parseList = liftM List $ sepBy parseExpr spaces
+
+parseDottedList :: Parser LispVal
+parseDottedList = do
+    hd <- endBy parseExpr spaces
+    tl <- char '.' >> spaces >> parseExpr
+    return $ DottedList hd tl
+
