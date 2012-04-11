@@ -12,6 +12,7 @@ data LispVal = Atom String
              | Number Integer
              | String String
              | Bool Bool
+             deriving (Show)
 
 -- Main
 
@@ -25,7 +26,7 @@ main = do
 readExpr :: String -> String
 readExpr input = case parse parseExpr "lisp" input of
     Left err -> "No match: " ++ show err
-    Right val -> "Found value"
+    Right val -> "Found value: " ++ show val
 
 -- Parsers
 
@@ -38,7 +39,7 @@ spaces = skipMany1 space
 parseString :: Parser LispVal
 parseString = do
     char '"'
-    x <- many (noneOf "\"")
+    x <- many $ (char '\\' >> char '"') <|> noneOf "\""
     char '"'
     return $ String x
 
@@ -58,7 +59,14 @@ parseNumber = do
     return $ Number (read digits)
 
 parseExpr :: Parser LispVal
-parseExpr = parseAtom <|> parseString <|> parseNumber
+parseExpr = parseAtom
+        <|> parseString
+        <|> parseNumber
+        <|> parseQuoted
+        <|> do char '('
+               x <- try parseList <|> parseDottedList
+               char ')'
+               return x
 
 parseList :: Parser LispVal
 parseList = liftM List $ sepBy parseExpr spaces
@@ -69,3 +77,8 @@ parseDottedList = do
     tl <- char '.' >> spaces >> parseExpr
     return $ DottedList hd tl
 
+parseQuoted :: Parser LispVal
+parseQuoted = do
+    char '\''
+    x <- parseExpr
+    return $ List [Atom "quote", x]
