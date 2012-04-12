@@ -16,7 +16,22 @@ data LispVal = Atom String
              | Char Char
              | String String
              | Bool Bool
-             deriving (Show)
+
+showVal :: LispVal -> String
+showVal (String contents) = "\"" ++ contents ++ "\""
+showVal (Char char) = ['#','\\',char]
+showVal (Atom name) = name
+showVal (Number contents) = show contents
+showVal (Bool True) = "#t"
+showVal (Bool False) = "#f"
+showVal (List contents) = "(" ++ unwordsList contents ++ ")"
+showVal (DottedList hd tl) = "(" ++ unwordsList hd ++ " . " ++ showVal tl ++ ")"
+
+unwordsList :: [LispVal] -> String
+unwordsList = unwords . map showVal
+
+instance Show LispVal where
+    show = showVal
 
 -- Main
 
@@ -30,7 +45,11 @@ main = do
 readExpr :: String -> String
 readExpr input = case parse parseExpr "lisp" input of
     Left err -> "No match: " ++ show err
-    Right val -> "Found value: " ++ show val
+    Right val -> "Found: " ++ show val
+
+-- Evaluation
+
+
 
 -- Parsers
 
@@ -85,7 +104,7 @@ parseNumber = do
         bin = do { string "#b"; s <- sign; y <- many1 binDigit; return (show $ readBin $ s:y) }
         dec = do { optional (string "#d"); s <- sign; y <- many1 digit; return (s:y) }
         binDigit = oneOf "01"
-        
+
 parseExpr :: Parser LispVal
 parseExpr = try parseChar
         <|> try parseNumber
