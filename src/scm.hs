@@ -16,7 +16,6 @@ data LispVal = Atom String
              | Char Char
              | String String
              | Bool Bool
-             deriving (Show)
 
 showVal :: LispVal -> String
 showVal (String contents) = "\"" ++ contents ++ "\""
@@ -31,8 +30,8 @@ showVal (DottedList hd tl) = "(" ++ unwordsList hd ++ " . " ++ showVal tl ++ ")"
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
 
---instance Show LispVal where
---    show = showVal
+instance Show LispVal where
+    show = showVal
 
 -- Main
 
