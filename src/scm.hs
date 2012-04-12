@@ -4,6 +4,9 @@ import System.Environment
 import Control.Monad
 import Text.ParserCombinators.Parsec hiding (spaces)
 
+import Numeric (readInt)
+import Char (digitToInt)
+
 -- Data definitions
 
 data LispVal = Atom String
@@ -47,6 +50,9 @@ escapedChar = do
         'n'  -> '\n'
         't'  -> '\t'
 
+sign :: Parser Char
+sign = option ' ' $ char '-'
+
 parseChar :: Parser LispVal
 parseChar = liftM Char $ string "#\\" >> (newline <|> space <|> anyChar)
     where newline = string "newline" >> return '\n'
@@ -71,14 +77,20 @@ parseAtom = do
 
 parseNumber :: Parser LispVal
 parseNumber = do
-    digits <- many1 digit
+    digits <- try hex <|> try oct <|> try bin <|> dec
     return $ Number (read digits)
-
+    where
+        hex = do { string "#x"; s <- sign; y <- many1 hexDigit; return (s:"0x"++y) }
+        oct = do { string "#o"; s <- sign; y <- many1 octDigit; return (s:"0o"++y) }
+        bin = do { string "#b"; s <- sign; y <- many1 binDigit; return (show $ readBin $ s:y) }
+        dec = do { optional (string "#d"); s <- sign; y <- many1 digit; return (s:y) }
+        binDigit = oneOf "01"
+        
 parseExpr :: Parser LispVal
 parseExpr = try parseChar
+        <|> try parseNumber
         <|> parseAtom
         <|> parseString
-        <|> parseNumber
         <|> parseQuoted
         <|> do char '('
                x <- try parseList <|> parseDottedList
@@ -99,3 +111,10 @@ parseQuoted = do
     char '\''
     x <- parseExpr
     return $ List [Atom "quote", x]
+
+-- Helper functions
+
+readBin :: Integral a => String -> a
+readBin (' ':s) = readBin s
+readBin ('-':s) = negate $ readBin s
+readBin s       = fst . head $ readInt 2 (`elem` "01") digitToInt s
