@@ -10,6 +10,7 @@ data LispVal = Atom String
              | List [LispVal]
              | DottedList [LispVal] LispVal
              | Number Integer
+             | Char Char
              | String String
              | Bool Bool
              deriving (Show)
@@ -46,6 +47,11 @@ escapedChar = do
         'n'  -> '\n'
         't'  -> '\t'
 
+parseChar :: Parser LispVal
+parseChar = liftM Char $ string "#\\" >> (newline <|> space <|> anyChar)
+    where newline = string "newline" >> return '\n'
+          space = string "space" >> return ' '
+
 parseString :: Parser LispVal
 parseString = do
     char '"'
@@ -69,7 +75,8 @@ parseNumber = do
     return $ Number (read digits)
 
 parseExpr :: Parser LispVal
-parseExpr = parseAtom
+parseExpr = try parseChar
+        <|> parseAtom
         <|> parseString
         <|> parseNumber
         <|> parseQuoted
