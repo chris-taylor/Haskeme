@@ -36,10 +36,20 @@ symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
 spaces :: Parser ()
 spaces = skipMany1 space
 
+escapedChar :: Parser Char
+escapedChar = do
+    char '\\'
+    x <- oneOf "\\\"tn"
+    return $ case x of
+        '\\' -> '\\'
+        '\"' -> '\"'
+        'n'  -> '\n'
+        't'  -> '\t'
+
 parseString :: Parser LispVal
 parseString = do
     char '"'
-    x <- many $ (char '\\' >> char '"') <|> noneOf "\""
+    x <- many $ escapedChar <|> noneOf "\""
     char '"'
     return $ String x
 
