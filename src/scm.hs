@@ -16,6 +16,7 @@ data LispVal = Atom String
              | Char Char
              | String String
              | Bool Bool
+             deriving (Show)
 
 showVal :: LispVal -> String
 showVal (String contents) = "\"" ++ contents ++ "\""
@@ -30,20 +31,13 @@ showVal (DottedList hd tl) = "(" ++ unwordsList hd ++ " . " ++ showVal tl ++ ")"
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
 
-instance Show LispVal where
-    show = showVal
+--instance Show LispVal where
+--    show = showVal
 
 -- Main
 
 main :: IO ()
 main = getArgs >>= print . eval . readExpr . head
-
--- Functions
-
-readExpr :: String -> LispVal
-readExpr input = case parse parseExpr "lisp" input of
-    Left err -> String $ "No match: " ++ show err
-    Right val -> val
 
 -- Evaluation
 
@@ -58,6 +52,8 @@ eval (List (Atom func : args))  = apply func (map eval args)
 apply :: String -> [LispVal] -> LispVal
 apply func args = maybe (Bool False) ($ args) (lookup func primitives)
 
+-- Functions
+
 primitives :: [(String, [LispVal] -> LispVal)]
 primitives = [ ("+", numericBinop (+))
              , ("-", numericBinop (-))
@@ -65,7 +61,12 @@ primitives = [ ("+", numericBinop (+))
              , ("/", numericBinop div)
              , ("mod", numericBinop mod)
              , ("quotient", numericBinop quot)
-             , ("remainder", numericBinop rem) ]
+             , ("remainder", numericBinop rem)
+             , ("symbol?", isType isSymbol)
+             , ("boolean?", isType isBool)
+             , ("char?", isType isChar)
+             , ("number?", isType isNumber)
+             , ("string?", isType isString) ]
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
 numericBinop op = Number . foldl1 op . map unpackNum
@@ -79,26 +80,36 @@ unpackNum (String n) = if null parsed
 unpackNum (List [n]) = unpackNum n
 unpackNum _          = 0
 
+isType :: (LispVal -> Bool) -> [LispVal] -> LispVal
+isType p (x:[]) = Bool (p x)
+isType p _      = error "Incorrect number of arguments: ISTYPE"
+
+isSymbol :: LispVal -> Bool
+isSymbol (Atom _) = True
+isSymbol _        = False
+
+isBool :: LispVal -> Bool
+isBool (Bool _) = True
+isBool _        = False
+
+isChar :: LispVal -> Bool
+isChar (Char _) = True
+isChar _        = False
+
+isNumber :: LispVal -> Bool
+isNumber (Number _) = True
+isNumber _          = False
+
+isString :: LispVal -> Bool
+isString (String _) = True
+isString _          = False
+
 -- Parsers
 
-symbol :: Parser Char
-symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
-
-spaces :: Parser ()
-spaces = skipMany1 space
-
-escapedChar :: Parser Char
-escapedChar = do
-    char '\\'
-    x <- oneOf "\\\"tn"
-    return $ case x of
-        '\\' -> '\\'
-        '\"' -> '\"'
-        'n'  -> '\n'
-        't'  -> '\t'
-
-sign :: Parser Char
-sign = option ' ' $ char '-'
+readExpr :: String -> LispVal
+readExpr input = case parse parseExpr "lisp" input of
+    Left err -> String $ "No match: " ++ show err
+    Right val -> val
 
 parseChar :: Parser LispVal
 parseChar = liftM Char $ string "#\\" >> (newline <|> space <|> anyChar)
@@ -159,7 +170,26 @@ parseQuoted = do
     x <- parseExpr
     return $ List [Atom "quote", x]
 
--- Helper functions
+-- Parsing helper functions
+
+symbol :: Parser Char
+symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
+
+spaces :: Parser ()
+spaces = skipMany1 space
+
+escapedChar :: Parser Char
+escapedChar = do
+    char '\\'
+    x <- oneOf "\\\"tn"
+    return $ case x of
+        '\\' -> '\\'
+        '\"' -> '\"'
+        'n'  -> '\n'
+        't'  -> '\t'
+
+sign :: Parser Char
+sign = option ' ' $ char '-'
 
 readBin :: Integral a => String -> a
 readBin (' ':s) = readBin s
