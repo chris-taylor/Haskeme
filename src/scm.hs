@@ -36,8 +36,6 @@ instance Show LispVal where
 
 -- Main
 
-data ReplResult = Continue | Quit deriving Eq
-
 main :: IO ()
 main = getArgs >>= readEvalPrint . head
 
@@ -48,12 +46,17 @@ readEvalPrint arg = do
 
 repl :: IO ReplResult
 repl = iterateUntil (== Quit) $ do
-    putStr "haskeme> "
+    putStr prompt
     line <- getLine
     case line of
         "quit" -> return Quit
         ""     -> return Continue
         _      -> readEvalPrint line >> return Continue
+
+prompt :: String
+prompt = "haskeme> "
+
+data ReplResult = Continue | Quit deriving Eq
 
 -- Evaluation
 
