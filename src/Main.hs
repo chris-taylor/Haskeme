@@ -3,12 +3,7 @@
 module Main where
 
 import System.Environment
-import Control.Monad
 import Control.Monad.Error
-import Text.ParserCombinators.Parsec hiding (spaces)
-
-import Numeric (readInt)
-import Char (digitToInt)
 
 import LispVal
 import LispError

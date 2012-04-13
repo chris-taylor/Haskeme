@@ -1,6 +1,5 @@
 module LispParser (readExpr) where
 
-import Control.Monad
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Numeric (readInt)
