@@ -98,7 +98,9 @@ primitives = [ ("+", numericBinop (+))
              , ("string<?", strBoolBinop (<))
              , ("string>?", strBoolBinop (>))
              , ("string<=?", strBoolBinop (<=))
-             , ("string>=?", strBoolBinop (>=)) ]
+             , ("string>=?", strBoolBinop (>=))
+             , ("car", car)
+             , ("cdr", cdr) ]
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> ThrowsError LispVal
 numericBinop op singleVal@[_] = throwError $ NumArgs 2 singleVal
@@ -158,6 +160,19 @@ isNumber _          = False
 isString :: LispVal -> Bool
 isString (String _) = True
 isString _          = False
+
+car :: [LispVal] -> ThrowsError LispVal
+car [List (x:xs)]         = return x
+car [DottedList (x:xs) _] = return x
+car [notList]             = throwError $ TypeMismatch "list" notList
+car badArgs               = throwError $ NumArgs 2 badArgs
+
+cdr :: [LispVal] -> ThrowsError LispVal
+cdr [List (x:xs)]           = return $ List xs
+cdr [DottedList (_ : xs) x] = return $ DottedList xs x
+cdr [DottedList [_] x]      = return x
+cdr [notList]               = throwError $ TypeMismatch "list" notList
+cdr badArgs                 = throwError $ NumArgs 2 badArgs
 
 -- Parsers
 
