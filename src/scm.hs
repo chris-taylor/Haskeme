@@ -44,6 +44,12 @@ readEvalPrint arg = do
     evaled <- return $ liftM show $ readExpr arg >>= eval
     putStrLn $ extractValue $ trapError evaled
 
+repl :: IO ()
+repl = forever $ putStr "haskeme>> " >> getLine
+    >>= (\line -> if null line
+        then return ()
+        else readEvalPrint line)
+
 -- Evaluation
 
 eval :: LispVal -> ThrowsError LispVal
