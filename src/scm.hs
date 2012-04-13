@@ -169,8 +169,8 @@ car badArgs               = throwError $ NumArgs 2 badArgs
 
 cdr :: [LispVal] -> ThrowsError LispVal
 cdr [List (x:xs)]           = return $ List xs
-cdr [DottedList (_ : xs) x] = return $ DottedList xs x
 cdr [DottedList [_] x]      = return x
+cdr [DottedList (_ : xs) x] = return $ DottedList xs x
 cdr [notList]               = throwError $ TypeMismatch "list" notList
 cdr badArgs                 = throwError $ NumArgs 2 badArgs
 
