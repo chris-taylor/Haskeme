@@ -36,6 +36,8 @@ instance Show LispVal where
 
 -- Main
 
+data ReplResult = Continue | Quit deriving Eq
+
 main :: IO ()
 main = getArgs >>= readEvalPrint . head
 
@@ -44,11 +46,14 @@ readEvalPrint arg = do
     evaled <- return $ liftM show $ readExpr arg >>= eval
     putStrLn $ extractValue $ trapError evaled
 
-repl :: IO ()
-repl = forever $ putStr "haskeme>> " >> getLine
-    >>= (\line -> if null line
-        then return ()
-        else readEvalPrint line)
+repl :: IO ReplResult
+repl = iterateUntil (== Quit) $ do
+    putStr "haskeme> "
+    line <- getLine
+    case line of
+        "quit" -> return Quit
+        ""     -> return Continue
+        _      -> readEvalPrint line >> return Continue
 
 -- Evaluation
 
@@ -313,3 +318,11 @@ trapError action = catchError action (return . show)
 extractValue :: ThrowsError a -> a
 extractValue (Right val) = val
 
+-- Monad loops
+
+iterateUntil :: (Monad m) => (a -> Bool) -> m a -> m a
+iterateUntil p x = do
+    y <- x
+    if p y
+        then return y
+        else iterateUntil p x
