@@ -1,4 +1,7 @@
-module LispVal where
+module LispVal (
+      LispVal (Atom,List,DottedList,Number,Char,String,Bool)
+    , unwordsList
+    ) where
 
 data LispVal = Atom String
              | List [LispVal]
