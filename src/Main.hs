@@ -2,6 +2,7 @@ module Main where
 
 import System.Environment
 import Control.Monad.Error
+import IO hiding (try)
 
 import LispVal
 import LispError
@@ -11,26 +12,40 @@ import Primitives
 -- Main
 
 main :: IO ()
-main = getArgs >>= readEvalPrint . head
+main = do
+    args <- getArgs
+    case length args of
+        0 -> runRepl
+        1 -> evalAndPrint $ args !! 0
+        otherwise -> putStrLn "Program takes 0 or 1 command line argument"
 
-readEvalPrint :: String -> IO ()
-readEvalPrint arg = do
-    evaled <- return $ liftM show $ readExpr arg >>= eval
-    putStrLn $ extractValue $ trapError evaled
+-- IO Functions
 
-repl :: IO ReplResult
-repl = iterateUntil (== Quit) $ do
-    putStr prompt
-    line <- getLine
-    case line of
-        "quit" -> return Quit
-        ""     -> return Continue
-        _      -> readEvalPrint line >> return Continue
+flushStr :: String -> IO ()
+flushStr str = putStr str >> hFlush stdout
 
-prompt :: String
-prompt = "haskeme> "
+readPrompt :: String -> IO String
+readPrompt prompt = flushStr prompt >> getLine
 
-data ReplResult = Continue | Quit deriving Eq
+evalString :: String -> IO String
+evalString expr = return $ extractValue $ trapError (liftM show $ readExpr expr >>= eval)
+
+evalAndPrint :: String -> IO ()
+evalAndPrint expr = if null expr
+    then return ()
+    else evalString expr >>= putStrLn
+
+runRepl :: IO ()
+runRepl = untilM_ (== "quit") (readPrompt "haskeme> ") evalAndPrint
+
+-- Monadic looping
+
+untilM_ :: (Monad m) => (a -> Bool) -> m a -> (a -> m ()) -> m ()
+untilM_ predicate prompt action = do
+    result <- prompt
+    if predicate result
+        then return ()
+        else action result >> untilM_ predicate prompt action
 
 -- Evaluation
 
@@ -53,12 +68,3 @@ apply :: String -> [LispVal] -> ThrowsError LispVal
 apply func args = maybe (throwError $ NotFunction "Unrecognized primitive function args" func)
                         ($ args)
                         (lookup func primitives)
-
--- Monad loops
-
-iterateUntil :: (Monad m) => (a -> Bool) -> m a -> m a
-iterateUntil p x = do
-    y <- x
-    if p y
-        then return y
-        else iterateUntil p x
