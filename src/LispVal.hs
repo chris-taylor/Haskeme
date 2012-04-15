@@ -1,7 +1,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 module LispVal (
-      LispVal (Atom,List,DottedList,Number,Char,String,Bool,PrimitiveFunc,Func)
+      LispVal (Atom,List,DottedList,Number,Char,String,Bool,PrimitiveFunc,Func,IOFunc,Port)
     , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,Default)
     , ThrowsError
     , IOThrowsError
