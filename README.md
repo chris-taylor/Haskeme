@@ -13,4 +13,4 @@ Aims and next steps:
 * Standard library
 * More primitives (esp. mathematical functions)
 * Improve numerical handling (rationals, floats, complex etc)
-
+* Special forms: cond, case, backquote/unquote
