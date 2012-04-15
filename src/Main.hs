@@ -17,10 +17,7 @@ import Eval
 main :: IO ()
 main = do
     args <- getArgs
-    case length args of
-        0 -> runRepl
-        1 -> runOne $ args !! 0
-        otherwise -> putStrLn "Program takes 0 or 1 command line argument"
+    if null args then runRepl else runOne $ args
 
 -- IO Functions
 
@@ -43,8 +40,11 @@ primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc IOFunc) ioPrimiti
                                               ++ map (makeFunc PrimitiveFunc) primitives)
     where makeFunc constructor (var, func) = (var, constructor func)
 
-runOne :: String -> IO ()
-runOne expr = primitiveBindings >>= flip evalAndPrint expr
+runOne :: [String] -> IO ()
+runOne args = do
+    env <- primitiveBindings >>= flip bindVars [("args", List $ map String $ drop 1 args)]
+    (runIOThrows $ liftM show $ eval env (List [Atom "load", String (args !! 0)]))
+        >>= hPutStrLn stderr
 
 runRepl :: IO ()
 runRepl = primitiveBindings >>= untilM_ (== "quit") (readPrompt "haskeme> ") . evalAndPrint
@@ -57,4 +57,3 @@ untilM_ predicate prompt action = do
     if predicate result
         then return ()
         else action result >> untilM_ predicate prompt action
-
