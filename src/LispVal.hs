@@ -1,10 +1,12 @@
+{-# LANGUAGE NoMonomorphismRestriction #-}
+
 module LispVal (
-      LispVal (Atom,List,DottedList,Number,Char,String,Bool)
+      LispVal (Atom,List,DottedList,Number,Char,String,Bool,PrimitiveFunc,Func)
     , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,Default)
     , ThrowsError
     , IOThrowsError
     , Env
-    , unwordsList
+    , unwordsList, makeNormalFunc, makeVarArgs
     ) where
 
 import Data.IORef
@@ -23,6 +25,9 @@ data LispVal = Atom String
              | PrimitiveFunc ([LispVal] -> ThrowsError LispVal)
              | Func { params :: [String], vararg :: Maybe String
                     , body :: [LispVal], closure :: Env }
+
+instance Show LispVal where
+    show = showVal
 
 data LispError = NumArgs Integer [LispVal]
                | Parser ParseError
@@ -55,5 +60,11 @@ showVal (Func { params = args, vararg = varargs, body = body, closure = env }) =
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
 
-instance Show LispVal where
-    show = showVal
+makeFunc :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
+makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
+
+makeNormalFunc :: (Monad m) => Env -> [LispVal] -> [LispVal] -> m LispVal
+makeNormalFunc = makeFunc Nothing
+
+makeVarArgs :: (Monad m) => LispVal -> Env -> [LispVal] -> [LispVal] -> m LispVal
+makeVarArgs = makeFunc . Just . showVal
