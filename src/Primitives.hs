@@ -34,7 +34,6 @@ primitives = [ ("+", numericBinop (+))
              , ("car", car)
              , ("cdr", cdr)
              , ("cons", cons)
-             , ("list", list)
              , ("eqv?", eqv)
              , ("eq?", eqv)
              , ("equal?", equal) ]
