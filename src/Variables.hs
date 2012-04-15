@@ -6,8 +6,6 @@ import Control.Monad.Error
 import LispVal
 import LispError
 
-type Env = IORef [(String, IORef LispVal)]
-
 nullEnv :: IO Env
 nullEnv = newIORef []
 
