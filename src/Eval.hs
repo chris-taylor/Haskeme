@@ -1,9 +1,10 @@
-module Eval where
+module Eval (eval, apply, load) where
 
 import Control.Monad.Error
 
 import LispVal
 import LispError
+import LispParser
 import Primitives
 import Variables
 
@@ -36,6 +37,8 @@ eval env (List (Atom "lambda" : DottedList params varargs : body)) =
     makeVarArgs varargs env params body
 eval env (List (Atom "lambda" : varargs@(Atom _) : body)) = 
     makeVarArgs varargs env [] body
+eval env (List [Atom "load", String filename]) = 
+    load filename >>= liftM last . mapM (eval env)
 eval env (List (function : args)) = do
     func <- eval env function
     argVals <- mapM (eval env) args
@@ -56,3 +59,6 @@ apply (Func params varargs body closure) args =
         bindVarArgs arg env = case arg of
             Just argName -> liftIO $ bindVars env [(argName, List $ remainingArgs)]
             Nothing -> return env
+
+load :: String -> IOThrowsError [LispVal]
+load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
