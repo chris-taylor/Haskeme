@@ -36,7 +36,24 @@ primitives = [ ("+", numericBinop (+))
              , ("cons", cons)
              , ("eqv?", eqv)
              , ("eq?", eqv)
-             , ("equal?", equal) ]
+             , ("equal?", equal)
+             , ("sin", numericUnop sin)
+             , ("cos", numericUnop cos)
+             , ("tan", numericUnop tan)
+             , ("asin", numericUnop asin)
+             , ("acos", numericUnop acos)
+             , ("atan", numericUnop atan)
+             , ("cosh", numericUnop cosh)
+             , ("sinh", numericUnop sinh)
+             , ("tanh", numericUnop tanh)
+             , ("acosh", numericUnop acosh)
+             , ("asinh", numericUnop asinh)
+             , ("atanh", numericUnop atanh)
+             , ("exp", numericUnop exp)
+             , ("log", numericUnop log) ]
+
+numericUnop :: (Float -> Float) -> [LispVal] -> ThrowsError LispVal
+numericUnop op [x] = unpackNum x >>= return . Number . round . op . fromIntegral
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> ThrowsError LispVal
 numericBinop op singleVal@[_] = throwError $ NumArgs 2 singleVal
