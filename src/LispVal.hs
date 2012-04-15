@@ -9,6 +9,7 @@ module LispVal (
     , unwordsList, makeNormalFunc, makeVarArgs
     ) where
 
+import IO
 import Data.IORef
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec (ParseError)
@@ -25,6 +26,8 @@ data LispVal = Atom String
              | PrimitiveFunc ([LispVal] -> ThrowsError LispVal)
              | Func { params :: [String], vararg :: Maybe String
                     , body :: [LispVal], closure :: Env }
+             | IOFunc ([LispVal] -> IOThrowsError LispVal)
+             | Port Handle
 
 instance Show LispVal where
     show = showVal
@@ -56,6 +59,8 @@ showVal (Func { params = args, vararg = varargs, body = body, closure = env }) =
         (case varargs of
             Nothing  -> ""
             Just arg -> " . " ++ arg) ++ ") ...)"
+showVal (IOFunc _) = "<IO primitive>"
+showVal (Port _) = "<IO port>"
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
