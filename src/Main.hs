@@ -37,8 +37,9 @@ evalAndPrint env expr = if null expr
     else evalString env expr >>= putStrLn
 
 primitiveBindings :: IO Env
-primitiveBindings = nullEnv >>= (flip bindVars $ map makePrimitiveFunc primitives)
-    where makePrimitiveFunc (var, func) = (var, PrimitiveFunc func)
+primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc IOFunc) ioPrimitives
+                                              ++ map (makeFunc PrimitiveFunc) primitives)
+    where makeFunc constructor (var, func) = (var, constructor func)
 
 runOne :: String -> IO ()
 runOne expr = primitiveBindings >>= flip evalAndPrint expr

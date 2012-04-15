@@ -1,6 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
-module Primitives (primitives) where
+module Primitives (primitives, ioPrimitives) where
 
 import Control.Monad.Error
 import LispVal
@@ -38,6 +38,18 @@ primitives = [ ("+", numericBinop (+))
              , ("eqv?", eqv)
              , ("eq?", eqv)
              , ("equal?", equal) ]
+
+ioPrimitives :: [(String, [LispVal] -> IOThrowsError LispVal)]
+ioPrimitives = []
+--ioPrimitives = [ ("apply", applyProc)
+--               , ("open-input-file", makePort ReadMode)
+--               , ("open-output-file", makePort WriteMode)
+--               , ("close-input-port", closePort)
+--               , ("close-output-port", closePort)
+--               , ("read", readProc)
+--               , ("write", writeProc)
+--               , ("read-contents", readContents)
+--               , ("read-all", readAll) ]
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> ThrowsError LispVal
 numericBinop op singleVal@[_] = throwError $ NumArgs 2 singleVal
