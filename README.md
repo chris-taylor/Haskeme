@@ -13,4 +13,8 @@ Aims and next steps:
 * Standard library
 * More primitives (esp. mathematical functions)
 * Improve numerical handling (rationals, floats, complex etc)
-* Special forms: cond, case, backquote/unquote
+* Special forms: cond, case, backquote/unquote, set-car!, set-cdr! (multi-argument if?)
+* Bindings: let (and with?)
+* Generic truth and falsity
+* More data structures (arrays, hashes etc)
+* Index into strings/arrays/hashes with function application notation?
