@@ -5,7 +5,6 @@ import Control.Monad.Error
 import LispVal
 import LispError
 import LispParser
-import Primitives
 import Variables
 
 -- Evaluation
