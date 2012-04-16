@@ -18,3 +18,4 @@ Aims and next steps:
 * Generic truth and falsity
 * More data structures (arrays, hashes etc)
 * Index into strings/arrays/hashes with function application notation?
+* Comments
