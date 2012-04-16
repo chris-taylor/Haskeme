@@ -1,4 +1,4 @@
-module Eval (eval, apply, load) where
+module EvalApply (eval, apply, load) where
 
 import Control.Monad.Error
 

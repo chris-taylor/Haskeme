@@ -10,7 +10,7 @@ import LispParser
 import Primitives
 import IOPrimitives
 import Variables
-import Eval
+import EvalApply
 
 -- Main
 

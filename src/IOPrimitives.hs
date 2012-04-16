@@ -6,7 +6,7 @@ import Control.Monad.Error
 import LispVal
 import LispError
 import LispParser
-import Eval
+import EvalApply
 
 ioPrimitives :: [(String, [LispVal] -> IOThrowsError LispVal)]
 ioPrimitives = [ ("apply", applyProc)
