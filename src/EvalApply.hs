@@ -17,8 +17,9 @@ eval env val@(Ratio _)   = return val
 eval env val@(Float _)   = return val
 eval env val@(Complex _) = return val
 eval env val@(Bool _)    = return val
-eval env (Atom name)    = getVar env name
+eval env (Atom name)     = getVar env name
 eval env (List [Atom "quote", val]) = return val
+eval env (List [Atom "quasiquote", val]) = evalQuasiQuoted env val
 eval env (List [Atom "if", predicate, conseq, alt]) = do
      result <- eval env predicate
      case result of
@@ -46,6 +47,11 @@ eval env (List (function : args)) = do
     argVals <- mapM (eval env) args
     apply func argVals
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
+
+evalQuasiQuoted :: Env -> LispVal -> IOThrowsError LispVal
+evalQuasiQuoted env (List [Atom "unquote", val]) = eval env val
+evalQuasiQuoted env (List vals) = liftM List $ mapM (evalQuasiQuoted env) vals
+evalQuasiQuoted env val = return val
 
 apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
 apply (PrimitiveFunc func) args = liftThrows $ func args
