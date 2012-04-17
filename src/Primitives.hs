@@ -17,11 +17,18 @@ primitives = [ ("+", numericBinop (+))
              , ("mod", numericBinop mod)
              , ("quotient", numericBinop quot)
              , ("remainder", numericBinop rem)
-             , ("symbol?", typeQuery isSymbol)
-             , ("boolean?", typeQuery isBool)
-             , ("char?", typeQuery isChar)
-             , ("number?", typeQuery isNumber)
-             , ("string?", typeQuery isString)
+             , ("symbol?", unaryBoolOp isSymbol)
+             , ("pair?", unaryBoolOp isPair)
+             , ("boolean?", unaryBoolOp isBool)
+             , ("char?", unaryBoolOp isChar)
+             , ("number?", unaryBoolOp isNumber)
+             , ("integer?", unaryBoolOp isInteger)
+             , ("ratio?", unaryBoolOp isRatio)
+             , ("float?", unaryBoolOp isFloat)
+             , ("complex?", unaryBoolOp isComplex)
+             , ("string?", unaryBoolOp isString)
+             , ("procedure?", unaryBoolOp isProcedure)
+             , ("port?", unaryBoolOp isPort)
              , ("=", numBoolBinop (==))
              , ("<", numBoolBinop (<))
              , (">", numBoolBinop (>))
@@ -137,9 +144,9 @@ unpackBool :: LispVal -> ThrowsError Bool
 unpackBool (Bool b) = return b
 unpackBool notBool  = throwError $ TypeMismatch "boolean" notBool
 
-typeQuery :: (LispVal -> Bool) -> [LispVal] -> ThrowsError LispVal
-typeQuery p [x] = return $ Bool (p x)
-typeQuery p xs  = throwError $ NumArgs 1 xs
+unaryBoolOp :: (LispVal -> Bool) -> [LispVal] -> ThrowsError LispVal
+unaryBoolOp p [x] = return $ Bool (p x)
+unaryBoolOp p xs  = throwError $ NumArgs 1 xs
 
 isSymbol :: LispVal -> Bool
 isSymbol (Atom _) = True
@@ -154,12 +161,46 @@ isChar (Char _) = True
 isChar _        = False
 
 isNumber :: LispVal -> Bool
-isNumber (Number _) = True
-isNumber _          = False
+isNumber (Number _)  = True
+isNumber (Ratio _)   = True
+isNumber (Float _)   = True
+isNumber (Complex _) = True
+isNumber _           = False
+
+isInteger :: LispVal -> Bool
+isInteger (Number _) = True
+isInteger _          = False
+
+isRatio :: LispVal -> Bool
+isRatio (Ratio _) = True
+isRatio _         = False
+
+isFloat :: LispVal -> Bool
+isFloat (Float _) = True
+isFloat _         = False
+
+isComplex :: LispVal -> Bool
+isComplex (Complex _) = True
+isComplex _           = False
 
 isString :: LispVal -> Bool
 isString (String _) = True
 isString _          = False
+
+isPair :: LispVal -> Bool
+isPair (List (x:_))          = True
+isPair (DottedList (x:_) tl) = True
+isPair _                     = False
+
+isProcedure :: LispVal -> Bool
+isProcedure (PrimitiveFunc _) = True
+isProcedure (IOFunc _)        = True
+isProcedure (Func _ _ _ _)    = True
+isProcedure _                 = False
+
+isPort :: LispVal -> Bool
+isPort (Port _) = True
+isPort _        = False
 
 car :: [LispVal] -> ThrowsError LispVal
 car [List (x:xs)]         = return x
