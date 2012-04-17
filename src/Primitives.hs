@@ -3,6 +3,9 @@
 module Primitives (primitives) where
 
 import Control.Monad.Error
+import Ratio
+import Complex
+
 import LispVal
 import LispError
 
@@ -71,13 +74,57 @@ strBoolBinop  = boolBinop unpackStr
 boolBoolBinop = boolBinop unpackBool
 
 unpackNum :: LispVal -> ThrowsError Integer
-unpackNum (Number n) = return n
-unpackNum (String n) = let parsed = reads n in
-                        if null parsed
-                            then throwError $ TypeMismatch "number" $ String n
-                            else return $ fst $ parsed !! 0
-unpackNum (List [n]) = unpackNum n
-unpackNum notNum     = throwError $ TypeMismatch "number" notNum
+unpackNum (Number n)    = return n
+unpackNum (Ratio n)     = if denominator n == 1
+                            then return $ numerator n
+                            else throwError $ TypeMismatch "number" $ Ratio n
+unpackNum (Float n)     = if isIntegral n
+                            then return $ round n
+                            else throwError $ TypeMismatch "number" $ Float n
+unpackNum (Complex n)   = if imagPart n == 0 && isIntegral (realPart n)
+                            then return $ round (realPart n)
+                            else throwError $ TypeMismatch "number" $ Complex n
+unpackNum (String n)    = let parsed = reads n in
+                            if null parsed
+                                then throwError $ TypeMismatch "number" $ String n
+                                else return $ fst $ parsed !! 0
+unpackNum (List [n])    = unpackNum n
+unpackNum notNum        = throwError $ TypeMismatch "number" notNum
+
+isIntegral :: Double -> Bool
+isIntegral x = fracPart == 0 where fracPart = x - fromIntegral (round x)
+
+unpackRat :: LispVal -> ThrowsError Rational
+unpackRat (Number n)  = return $ fromIntegral n
+unpackRat (Ratio n)   = return n
+unpackRat (Float n)   = return $ toRational n
+unpackRat (Complex n) = if imagPart n == 0
+                            then return $ toRational (realPart n)
+                            else throwError $ TypeMismatch "ratio" $ Complex n
+unpackRat (List [n])  = unpackRat n
+unpackRat notRat      = throwError $ TypeMismatch "ratio" notRat
+
+unpackFloat :: LispVal -> ThrowsError Double
+unpackFloat (Number n)  = return $ fromIntegral n
+unpackFloat (Ratio n)   = return $ fromRational n
+unpackFloat (Float n)   = return n
+unpackFloat (Complex n) = if imagPart n == 0
+                            then return (realPart n)
+                            else throwError $ TypeMismatch "float" $ Complex n
+unpackFloat (String n)  = let parsed = reads n in
+                            if null parsed
+                                then throwError $ TypeMismatch "number" $ String n
+                                else return $ fst $ parsed !! 0
+unpackFloat (List [n])  = unpackFloat n
+unpackFloat notFloat    = throwError $ TypeMismatch "float" notFloat
+
+unpackCplx :: LispVal -> ThrowsError (Complex Double)
+unpackCplx (Number n)   = return $ fromIntegral n
+unpackCplx (Ratio n)    = return $ fromRational n
+unpackCplx (Float n)    = return $ n :+ 0
+unpackCplx (Complex n)  = return n
+unpackCplx (List [n])   = unpackCplx n
+unpackCplx notComplex   = throwError $ TypeMismatch "complex" notComplex
 
 unpackStr :: LispVal -> ThrowsError String
 unpackStr (String s) = return s
@@ -150,6 +197,9 @@ eqv [Atom arg1, Atom arg2] = return $ Bool $ arg1 == arg2
 eqv [Char arg1, Char arg2] = return $ Bool $ arg1 == arg2
 eqv [String arg1, String arg2] = return $ Bool $ arg1 == arg2
 eqv [Number arg1, Number arg2] = return $ Bool $ arg1 == arg2
+eqv [Ratio arg1, Ratio arg2]   = return $ Bool $ arg1 == arg2
+eqv [Float arg1, Float arg2]   = return $ Bool $ arg1 == arg2
+eqv [Complex arg1, Complex arg2] = return $ Bool $ arg1 == arg2
 eqv [DottedList xs x, DottedList ys y] = eqv [List $ xs ++ [x], List $ ys ++ [y]]
 eqv [l1@(List _), l2@(List _)] = listEquals eqv l1 l2
 eqv [_ , _] = return $ Bool False
@@ -169,7 +219,9 @@ equal [DottedList xs x, DottedList ys y] = equal [List $ xs ++ [x], List $ ys ++
 equal [l1@(List _), l2@(List _)] = listEquals equal l1 l2
 equal [arg1, arg2] = do
     primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2)
-                       [AnyUnpacker unpackNum, AnyUnpacker unpackStr, AnyUnpacker unpackBool]
+                       [AnyUnpacker unpackNum, AnyUnpacker unpackRat,
+                        AnyUnpacker unpackFloat, AnyUnpacker unpackCplx,
+                        AnyUnpacker unpackStr, AnyUnpacker unpackBool]
     eqvEquals <- eqv [arg1, arg2]
     return $ Bool $ (primitiveEquals || let (Bool x) = eqvEquals in x)
 equal badArgs = throwError $ NumArgs 2 badArgs
