@@ -14,7 +14,7 @@ eval env val@(String _) = return val
 eval env val@(Char _)   = return val
 eval env val@(Number _) = return val
 eval env val@(Bool _)   = return val
-eval env (Atom id)      = getVar env id
+eval env (Atom name)    = getVar env name
 eval env (List [Atom "quote", val]) = return val
 eval env (List [Atom "if", predicate, conseq, alt]) = do
      result <- eval env predicate
