@@ -30,7 +30,10 @@ parseExpr = parseAtom
         <|> try parseRatio
         <|> try parseNumber
         <|> try parseChar
-        <|> parseQuoted
+        <|> parseQuote
+        <|> parseQuasiquote
+        <|> try parseUnquoteSplicing
+        <|> parseUnquote
         <|> do char '('
                x <- try parseList <|> parseDottedList
                char ')'
@@ -118,11 +121,29 @@ parseChar = liftM Char $ string "#\\" >> (newline <|> space <|> anyChar)
     where newline = string "newline" >> return '\n'
           space = string "space" >> return ' '
 
-parseQuoted :: Parser LispVal
-parseQuoted = do
+parseQuote :: Parser LispVal
+parseQuote = do
     char '\''
     x <- parseExpr
     return $ List [Atom "quote", x]
+
+parseQuasiquote :: Parser LispVal
+parseQuasiquote = do
+    char '`'
+    x <- parseExpr
+    return $ List [Atom "quasiquote", x]
+
+parseUnquoteSplicing :: Parser LispVal
+parseUnquoteSplicing = do
+    string ",@"
+    x <- parseExpr
+    return $ List [Atom "unquotesplicing", x]
+
+parseUnquote :: Parser LispVal
+parseUnquote = do
+    char ','
+    x <- parseExpr
+    return $ List [Atom "unquote", x]
 
 parseList :: Parser LispVal
 parseList = liftM List $ sepBy parseExpr spaces
