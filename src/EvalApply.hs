@@ -20,6 +20,8 @@ eval env val@(Bool _)    = return val
 eval env (Atom name)     = getVar env name
 eval env (List [Atom "quote", val]) = return val
 eval env (List [Atom "quasiquote", val]) = evalQuasiquote env val
+eval env (List [Atom "let", Atom var, form, expr]) = evalLet env var form expr
+eval env (List [Atom "with", List bindings, expr]) = evalWith env bindings expr
 eval env (List (Atom "begin" : exprs)) = evalBegin env exprs
 eval env (List [Atom "if", test, conseq, alt]) = evalIf env test conseq alt
 eval env (List (Atom "cond" : clauses)) = evalCond env clauses
@@ -67,6 +69,22 @@ apply (String str) [arg]      = throwError $ TypeMismatch "integer" arg
 apply (String str) args       = throwError $ NumArgs 1 args
 
 -- Helper functions
+
+nil :: LispVal
+nil = List []
+
+evalLet :: Env -> String -> LispVal -> LispVal -> IOThrowsError LispVal
+evalLet env var form expr = do
+    val <- eval env form
+    newEnv <- liftIO $ bindVars env [(var,val)]
+    eval newEnv expr
+
+evalWith :: Env -> [LispVal] -> LispVal -> IOThrowsError LispVal
+evalWith env []                       expr = eval env expr
+evalWith env (Atom var : form : rest) expr = do
+    val <- eval env form
+    newEnv <- liftIO $ bindVars env [(var,val)]
+    evalWith newEnv rest expr
 
 evalBegin :: Env -> [LispVal] -> IOThrowsError LispVal
 evalBegin env [] = throwError $ NumArgs 1 [List []]
