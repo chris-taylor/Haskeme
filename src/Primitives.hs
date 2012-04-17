@@ -1,6 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
-module Primitives (primitives) where
+module Primitives (primitives,eqv) where
 
 import Control.Monad.Error
 import LispVal
