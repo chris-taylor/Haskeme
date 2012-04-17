@@ -60,7 +60,9 @@ apply (Func params varargs body closure) args =
         bindVarArgs arg env = case arg of
             Just argName -> liftIO $ bindVars env [(argName, List $ remainingArgs)]
             Nothing -> return env
-apply (String str) [Number n] = return $ Char $ str !! (fromInteger n)
+apply (String str) [Number n] = if fromInteger n >= length str
+                                    then return nil
+                                    else return $ Char $ str !! (fromInteger n)
 apply (String str) [arg]      = throwError $ TypeMismatch "integer" arg
 apply (String str) args       = throwError $ NumArgs 1 args
 
