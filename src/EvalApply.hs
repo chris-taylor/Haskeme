@@ -6,6 +6,7 @@ import LispVal
 import LispError
 import LispParser
 import Variables
+import Primitives (eqv)
 
 -- Evaluation
 
@@ -25,6 +26,8 @@ eval env (List [Atom "if", predicate, conseq, alt]) =
     evalIf env predicate conseq alt
 eval env (List (Atom "cond" : clauses)) = 
     evalCond env clauses
+eval env (List (Atom "case" : key : clauses)) = 
+    evalCase env key clauses
 eval env (List [Atom "set!", Atom var, form]) = 
     eval env form >>= setVar env var
 eval env (List [Atom "define", Atom var, form]) = 
@@ -83,6 +86,20 @@ evalCond env (List [predicate, expr] : rest) = do
         Bool True  -> eval env expr
         Bool False -> evalCond env rest
         notBool    -> throwError $ TypeMismatch "boolean" notBool
+
+evalCase :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
+evalCase env key clauses = do
+    result <- eval env key
+    evalCase' env result clauses
+
+evalCase' :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
+evalCase' env key [] = throwError $ NumArgs 1 [List []]
+evalCase' env key [List [Atom "else", expr]] = eval env expr
+evalCase' env key (List [obj, expr] : rest) = do
+    result <- eval env obj
+    case eqv [key, result] of
+        Right (Bool True)  -> eval env expr
+        Right (Bool False) -> evalCase' env key rest
 
 evalQuasiquote :: Env -> LispVal -> IOThrowsError LispVal
 evalQuasiquote env (List [Atom "unquote", val]) = eval env val
