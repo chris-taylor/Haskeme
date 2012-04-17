@@ -6,7 +6,7 @@ module LispVal (
     , ThrowsError
     , IOThrowsError
     , Env
-    , unwordsList, makeNormalFunc, makeVarArgs
+    , showVal, unwordsList
     ) where
 
 import IO
@@ -64,12 +64,3 @@ showVal (Port _) = "<IO port>"
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
-
-makeFunc :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
-makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
-
-makeNormalFunc :: (Monad m) => Env -> [LispVal] -> [LispVal] -> m LispVal
-makeNormalFunc = makeFunc Nothing
-
-makeVarArgs :: (Monad m) => LispVal -> Env -> [LispVal] -> [LispVal] -> m LispVal
-makeVarArgs = makeFunc . Just . showVal
