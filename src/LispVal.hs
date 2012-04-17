@@ -11,7 +11,8 @@ module LispVal (
 
 import IO
 import Data.IORef
-import Data.Complex
+import Ratio
+import Complex
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec (ParseError)
 
