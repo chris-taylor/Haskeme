@@ -52,10 +52,10 @@ showVal :: LispVal -> String
 showVal (String contents) = "\"" ++ contents ++ "\""
 showVal (Char char) = ['#','\\',char]
 showVal (Atom name) = name
-showVal (Number contents) = show contents
-showVal (Ratio contents) = show contents
-showVal (Float contents) = show contents
-showVal (Complex contents) = show contents
+showVal (Number num) = show num
+showVal (Ratio num) = show (numerator num) ++ "/" ++ show (denominator num)
+showVal (Float num) = show num
+showVal (Complex num) = show (realPart num) ++ "+" ++ show (imagPart num) ++ "i"
 showVal (Bool True) = "#t"
 showVal (Bool False) = "#f"
 showVal (List contents) = "(" ++ unwordsList contents ++ ")"
