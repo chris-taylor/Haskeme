@@ -59,5 +59,14 @@ apply (Func params varargs body closure) args =
             Just argName -> liftIO $ bindVars env [(argName, List $ remainingArgs)]
             Nothing -> return env
 
+makeFunc :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
+makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
+
+makeNormalFunc :: (Monad m) => Env -> [LispVal] -> [LispVal] -> m LispVal
+makeNormalFunc = makeFunc Nothing
+
+makeVarArgs :: (Monad m) => LispVal -> Env -> [LispVal] -> [LispVal] -> m LispVal
+makeVarArgs = makeFunc . Just . showVal
+
 load :: String -> IOThrowsError [LispVal]
 load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
