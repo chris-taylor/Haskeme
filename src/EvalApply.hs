@@ -19,21 +19,16 @@ eval env val@(Complex _) = return val
 eval env val@(Bool _)    = return val
 eval env (Atom name)     = getVar env name
 eval env (List [Atom "quote", val]) = return val
-eval env (List [Atom "quasiquote", val]) =
-    evalQuasiquote env val
-eval env (List [Atom "if", predicate, conseq, alt]) =
-    evalIf env predicate conseq alt
-eval env (List (Atom "cond" : clauses)) = 
-    evalCond env clauses
-eval env (List (Atom "case" : key : clauses)) = 
-    evalCase env key clauses
-eval env (List [Atom "set!", Atom var, form]) = 
-    eval env form >>= setVar env var
-eval env (List [Atom "define", Atom var, form]) = 
-    eval env form >>= defineVar env var
+eval env (List [Atom "quasiquote", val]) = evalQuasiquote env val
+eval env (List (Atom "begin" : exprs)) = evalBegin env exprs
+eval env (List [Atom "if", test, conseq, alt]) = evalIf env test conseq alt
+eval env (List (Atom "cond" : clauses)) = evalCond env clauses
+eval env (List (Atom "case" : key : clauses)) = evalCase env key clauses
+eval env (List [Atom "set!", Atom var, form]) = eval env form >>= setVar env var
+eval env (List [Atom "define", Atom var, form]) = eval env form >>= defineVar env var
 eval env (List (Atom "define" : List (Atom var : params) : body)) = 
     makeNormalFunc env params body >>= defineVar env var
-eval env (List (Atom "define" : DottedList (Atom var : params) varargs : body)) = 
+eval env (List (Atom "define" : DottedList (Atom var : params) varargs : body)) =
     makeVarArgs varargs env params body >>= defineVar env var
 eval env (List (Atom "lambda" : List params : body)) = 
     makeNormalFunc env params body
@@ -67,6 +62,11 @@ apply (Func params varargs body closure) args =
             Nothing -> return env
 
 -- Helper functions
+
+evalBegin :: Env -> [LispVal] -> IOThrowsError LispVal
+evalBegin env [] = throwError $ NumArgs 1 [List []]
+evalBegin env [expr] = eval env expr
+evalBegin env (expr : rest) = eval env expr >> evalBegin env rest
 
 evalIf :: Env -> LispVal -> LispVal -> LispVal -> IOThrowsError LispVal
 evalIf env predicate conseq alt = do
