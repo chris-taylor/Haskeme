@@ -6,7 +6,6 @@ import LispVal
 import LispError
 import LispParser
 import Variables
-import Primitives (eqv)
 
 -- Evaluation
 
@@ -97,9 +96,9 @@ evalCase' env key [] = throwError $ NumArgs 1 [List []]
 evalCase' env key [List [Atom "else", expr]] = eval env expr
 evalCase' env key (List [obj, expr] : rest) = do
     result <- eval env obj
-    case eqv [key, result] of
-        Right (Bool True)  -> eval env expr
-        Right (Bool False) -> evalCase' env key rest
+    if eqv key result
+        then eval env expr
+        else evalCase' env key rest
 
 evalQuasiquote :: Env -> LispVal -> IOThrowsError LispVal
 evalQuasiquote env (List [Atom "unquote", val]) = eval env val
@@ -120,3 +119,16 @@ makeVarArgs = makeFunc . Just . showVal
 
 load :: String -> IOThrowsError [LispVal]
 load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
+
+eqv :: LispVal -> LispVal -> Bool
+eqv (Bool arg1) (Bool arg2) = arg1 == arg2
+eqv (Atom arg1) (Atom arg2) = arg1 == arg2
+eqv (Char arg1) (Char arg2) = arg1 == arg2
+eqv (String arg1) (String arg2) = arg1 == arg2
+eqv (Number arg1) (Number arg2) = arg1 == arg2
+eqv (Ratio arg1) (Ratio arg2) = arg1 == arg2
+eqv (Float arg1) (Float arg2) = arg1 == arg2
+eqv (Complex arg1) (Complex arg2) = arg1 == arg2
+eqv (DottedList xs x) (DottedList ys y) = eqv (List $ xs ++ [x]) (List $ ys ++ [y])
+eqv (List xs) (List ys) = length xs == length ys && and (map (uncurry eqv) $ zip xs ys)
+eqv _ _ = False
