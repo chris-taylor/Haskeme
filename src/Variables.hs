@@ -27,6 +27,26 @@ setVar envRef var value = do
           (lookup var env)
     return value
 
+setCar :: Env -> String -> LispVal -> IOThrowsError LispVal
+setCar envRef var val = do
+    env <- liftIO $ readIORef envRef
+    maybe (throwError $ UnboundVar "Setting car of an unbound variable" var)
+          (\varRef -> do
+            (List (car : cdr)) <- liftIO $ readIORef varRef
+            liftIO $ writeIORef varRef (List (val : cdr)))
+          (lookup var env)
+    return val
+
+setCdr :: Env -> String -> LispVal -> IOThrowsError LispVal
+setCdr envRef var (List val) = do
+    env <- liftIO $ readIORef envRef
+    maybe (throwError $ UnboundVar "Setting cdr of an unbound variable" var)
+          (\varRef -> do
+            (List (car : cdr)) <- liftIO $ readIORef varRef
+            liftIO $ writeIORef varRef (List (car : val)))
+          (lookup var env)
+    return (List val)
+
 defineVar :: Env -> String -> LispVal -> IOThrowsError LispVal
 defineVar envRef var value = do
     alreadyDefined <- liftIO $ isBound envRef var

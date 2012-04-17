@@ -27,6 +27,8 @@ eval env (List [Atom "if", test, conseq, alt]) = evalIf env test conseq alt
 eval env (List (Atom "cond" : clauses)) = evalCond env clauses
 eval env (List (Atom "case" : key : clauses)) = evalCase env key clauses
 eval env (List [Atom "set!", Atom var, form]) = eval env form >>= setVar env var
+eval env (List [Atom "set-car!", Atom var, form]) = eval env form >>= setCar env var
+eval env (List [Atom "set-cdr!", Atom var, form]) = eval env form >>= setCdr env var
 eval env (List [Atom "define", Atom var, form]) = eval env form >>= defineVar env var
 eval env (List (Atom "define" : List (Atom var : params) : body)) = 
     makeNormalFunc env params body >>= defineVar env var
