@@ -1,16 +1,17 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 module LispVal (
-      LispVal (Atom,List,DottedList,Number,Char,String,Bool,PrimitiveFunc,Func,IOFunc,Port)
+      LispVal (Atom,List,DottedList,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,Func,IOFunc,Port)
     , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,Default)
     , ThrowsError
     , IOThrowsError
     , Env
-    , unwordsList, makeNormalFunc, makeVarArgs
+    , showVal, unwordsList
     ) where
 
 import IO
 import Data.IORef
+import Data.Complex
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec (ParseError)
 
@@ -20,6 +21,9 @@ data LispVal = Atom String
              | List [LispVal]
              | DottedList [LispVal] LispVal
              | Number Integer
+             | Ratio Rational
+             | Float Double
+             | Complex (Complex Double)
              | Char Char
              | String String
              | Bool Bool
@@ -48,7 +52,10 @@ showVal :: LispVal -> String
 showVal (String contents) = "\"" ++ contents ++ "\""
 showVal (Char char) = ['#','\\',char]
 showVal (Atom name) = name
-showVal (Number contents) = show contents
+showVal (Number num) = show num
+showVal (Ratio num) = show (numerator num) ++ "/" ++ show (denominator num)
+showVal (Float num) = show num
+showVal (Complex num) = show (realPart num) ++ "+" ++ show (imagPart num) ++ "i"
 showVal (Bool True) = "#t"
 showVal (Bool False) = "#f"
 showVal (List contents) = "(" ++ unwordsList contents ++ ")"
@@ -64,12 +71,3 @@ showVal (Port _) = "<IO port>"
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
-
-makeFunc :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
-makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
-
-makeNormalFunc :: (Monad m) => Env -> [LispVal] -> [LispVal] -> m LispVal
-makeNormalFunc = makeFunc Nothing
-
-makeVarArgs :: (Monad m) => LispVal -> Env -> [LispVal] -> [LispVal] -> m LispVal
-makeVarArgs = makeFunc . Just . showVal
