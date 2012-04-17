@@ -41,6 +41,8 @@ primitives = [ ("+", numericBinop (+))
              , ("string>?", strBoolBinop (>))
              , ("string<=?", strBoolBinop (<=))
              , ("string>=?", strBoolBinop (>=))
+             , ("symbol->string", symbolToString)
+             , ("string->symbol", stringToSymbol)
              , ("car", car)
              , ("cdr", cdr)
              , ("cons", cons)
@@ -201,6 +203,16 @@ isProcedure _                 = False
 isPort :: LispVal -> Bool
 isPort (Port _) = True
 isPort _        = False
+
+symbolToString :: [LispVal] -> ThrowsError LispVal
+symbolToString [Atom val] = return $ String val
+symbolToString [notAtom]  = throwError $ TypeMismatch "symbol" notAtom
+symbolToString args       = throwError $ NumArgs 1 args
+
+stringToSymbol :: [LispVal] -> ThrowsError LispVal
+stringToSymbol [String val] = return $ Atom val
+stringToSymbol [notString]  = throwError $ TypeMismatch "string" notString
+stringToSymbol args         = throwError $ NumArgs 1 args
 
 car :: [LispVal] -> ThrowsError LispVal
 car [List (x:xs)]         = return x
