@@ -11,6 +11,7 @@ module LispVal (
 
 import IO
 import Data.IORef
+import Data.Complex
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec (ParseError)
 
@@ -20,6 +21,9 @@ data LispVal = Atom String
              | List [LispVal]
              | DottedList [LispVal] LispVal
              | Number Integer
+             | Ratio Rational
+             | Float Double
+             | Complex (Complex Double)
              | Char Char
              | String String
              | Bool Bool
@@ -49,6 +53,9 @@ showVal (String contents) = "\"" ++ contents ++ "\""
 showVal (Char char) = ['#','\\',char]
 showVal (Atom name) = name
 showVal (Number contents) = show contents
+showVal (Ratio contents) = show contents
+showVal (Float contents) = show contents
+showVal (Complex contents) = show contents
 showVal (Bool True) = "#t"
 showVal (Bool False) = "#f"
 showVal (List contents) = "(" ++ unwordsList contents ++ ")"
