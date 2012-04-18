@@ -151,6 +151,7 @@ eqqList n env (List [Atom "unquotesplicing", val]) = do
     case result of
         (List xs) -> return xs
         notList   -> throwError $ TypeMismatch "list" notList
+eqqList n env (List vals) = liftM (return . List . concat) $ mapM (eqqList n env) vals
 eqqList n env val = return $ return val
 
 makeFunc :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
