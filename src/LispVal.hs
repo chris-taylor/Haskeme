@@ -1,4 +1,4 @@
-{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE NoMonomorphismRestriction, TypeSynonymInstances, FlexibleInstances #-}
 
 module LispVal (
       LispVal (Atom,List,DottedList,Vector,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,Func,IOFunc,Port)
@@ -76,3 +76,14 @@ showVal (Port _) = "<IO port>"
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
+
+-- These guys are here for debugging - it allows me to derive an instance for LispVal that will show me the underlying Haskell representation rather than the pretty-printed Haskeme version. For these to work correctly I need the TypeSynonymInstances and FlexibleInstances pragmas. If we're not using this debug capability then those pragmas don't need to be there.
+
+instance Show Env where
+  show _ = "<environment>"
+
+instance Show ([LispVal] -> ThrowsError LispVal) where
+  show _ = "<primitive>"
+
+instance Show ([LispVal] -> IOThrowsError LispVal) where
+  show _ = "<ioPrimitive>"
