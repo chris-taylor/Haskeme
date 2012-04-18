@@ -9,16 +9,11 @@ import Complex
 
 import LispVal
 import LispError
+import LispNum
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
-primitives = [ ("+", numericBinop (+))
-             , ("-", numericBinop (-))
-             , ("*", numericBinop (*))
-             , ("/", numericBinop div)
-             , ("mod", numericBinop mod)
-             , ("quotient", numericBinop quot)
-             , ("remainder", numericBinop rem)
-             , ("symbol?", unaryBoolOp isSymbol)
+primitives = numericPrimitives ++ 
+             [ ("symbol?", unaryBoolOp isSymbol)
              , ("pair?", unaryBoolOp isPair)
              , ("boolean?", unaryBoolOp isBool)
              , ("char?", unaryBoolOp isChar)
@@ -52,28 +47,7 @@ primitives = [ ("+", numericBinop (+))
              , ("cons", cons)
              , ("eqv?", eqv)
              , ("eq?", eqv)
-             , ("equal?", equal)
-             , ("sin", numericUnop sin)
-             , ("cos", numericUnop cos)
-             , ("tan", numericUnop tan)
-             , ("asin", numericUnop asin)
-             , ("acos", numericUnop acos)
-             , ("atan", numericUnop atan)
-             , ("cosh", numericUnop cosh)
-             , ("sinh", numericUnop sinh)
-             , ("tanh", numericUnop tanh)
-             , ("acosh", numericUnop acosh)
-             , ("asinh", numericUnop asinh)
-             , ("atanh", numericUnop atanh)
-             , ("exp", numericUnop exp)
-             , ("log", numericUnop log) ]
-
-numericUnop :: (Float -> Float) -> [LispVal] -> ThrowsError LispVal
-numericUnop op [x] = unpackNum x >>= return . Number . round . op . fromIntegral
-
-numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> ThrowsError LispVal
-numericBinop op singleVal@[_] = throwError $ NumArgs 2 singleVal
-numericBinop op params        = mapM unpackNum params >>= return . Number . foldl1 op
+             , ("equal?", equal) ]
 
 boolBinop :: (LispVal -> ThrowsError a) -> (a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
 boolBinop unpacker op args = if length args /= 2
@@ -86,6 +60,16 @@ numBoolBinop  = boolBinop unpackNum
 strBoolBinop  = boolBinop unpackStr
 boolBoolBinop = boolBinop unpackBool
 
+unpackStr :: LispVal -> ThrowsError String
+unpackStr (String s) = return s
+unpackStr (Number s) = return $ show s
+unpackStr (Bool s)   = return $ show s
+unpackStr (Char s)   = return $ show s
+unpackStr notString  = throwError $ TypeMismatch "string" notString
+
+unpackBool :: LispVal -> ThrowsError Bool
+unpackBool (Bool b) = return b
+unpackBool notBool  = throwError $ TypeMismatch "boolean" notBool
 unpackNum :: LispVal -> ThrowsError Integer
 unpackNum (Number n)    = return n
 unpackNum (Ratio n)     = if denominator n == 1
@@ -138,17 +122,6 @@ unpackCplx (Float n)    = return $ n :+ 0
 unpackCplx (Complex n)  = return n
 unpackCplx (List [n])   = unpackCplx n
 unpackCplx notComplex   = throwError $ TypeMismatch "complex" notComplex
-
-unpackStr :: LispVal -> ThrowsError String
-unpackStr (String s) = return s
-unpackStr (Number s) = return $ show s
-unpackStr (Bool s)   = return $ show s
-unpackStr (Char s)   = return $ show s
-unpackStr notString  = throwError $ TypeMismatch "string" notString
-
-unpackBool :: LispVal -> ThrowsError Bool
-unpackBool (Bool b) = return b
-unpackBool notBool  = throwError $ TypeMismatch "boolean" notBool
 
 unaryBoolOp :: (LispVal -> Bool) -> [LispVal] -> ThrowsError LispVal
 unaryBoolOp p [x] = return $ Bool (p x)

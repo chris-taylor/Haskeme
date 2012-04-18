@@ -60,11 +60,6 @@ parseBool = do
                 't' -> Bool True
                 'f' -> Bool False
 
-parseVector :: Parser LispVal
-parseVector = do
-    arrayVals <- sepBy parseExpr spaces
-    return $ Vector (listArray (0, (length arrayVals - 1)) arrayVals)
-
 parseComplex :: Parser LispVal
 parseComplex = do
     x <- (try parseFloat <|> parseDec1)
