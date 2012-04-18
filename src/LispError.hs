@@ -25,6 +25,8 @@ showError (NotFunction message func) = message ++ ": " ++ show func
 showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected
     ++ ", found " ++ show found
 showError (UnboundVar message varname) = message ++ ": " ++ varname
+showError (OutOfRange n bounds obj) = "Index " ++ show n ++ " out of range "
+    ++ show bounds ++ " for object: " ++ show obj
 
 trapError :: (MonadError e m, Show e) => m String -> m String
 trapError action = catchError action (return . show)
