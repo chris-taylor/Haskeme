@@ -3,6 +3,7 @@
 module Primitives (primitives) where
 
 import Control.Monad.Error
+import Data.Array
 import Ratio
 import Complex
 
@@ -41,8 +42,11 @@ primitives = [ ("+", numericBinop (+))
              , ("string>?", strBoolBinop (>))
              , ("string<=?", strBoolBinop (<=))
              , ("string>=?", strBoolBinop (>=))
-             , ("symbol->string", symbolToString)
-             , ("string->symbol", stringToSymbol)
+             , ("vector", vector)
+             , ("symbol->string", typeTrans symbolToString)
+             , ("string->symbol", typeTrans stringToSymbol)
+             , ("vector->list", typeTrans vectorToList)
+             , ("list->vector", typeTrans listToVector)
              , ("car", car)
              , ("cdr", cdr)
              , ("cons", cons)
@@ -204,15 +208,25 @@ isPort :: LispVal -> Bool
 isPort (Port _) = True
 isPort _        = False
 
-symbolToString :: [LispVal] -> ThrowsError LispVal
-symbolToString [Atom val] = return $ String val
-symbolToString [notAtom]  = throwError $ TypeMismatch "symbol" notAtom
-symbolToString args       = throwError $ NumArgs 1 args
+typeTrans :: (LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
+typeTrans f [x]  = f x
+typeTrans f args = throwError $ NumArgs 1 args
 
-stringToSymbol :: [LispVal] -> ThrowsError LispVal
-stringToSymbol [String val] = return $ Atom val
-stringToSymbol [notString]  = throwError $ TypeMismatch "string" notString
-stringToSymbol args         = throwError $ NumArgs 1 args
+symbolToString :: LispVal -> ThrowsError LispVal
+symbolToString (Atom val) = return $ String val
+symbolToString notAtom    = throwError $ TypeMismatch "symbol" notAtom
+
+stringToSymbol :: LispVal -> ThrowsError LispVal
+stringToSymbol (String val) = return $ Atom val
+stringToSymbol notString    = throwError $ TypeMismatch "string" notString
+
+vectorToList :: LispVal -> ThrowsError LispVal
+vectorToList (Vector arr) = return $ List (elems arr)
+vectorToList notVector    = throwError $ TypeMismatch "vector" notVector
+
+listToVector :: LispVal -> ThrowsError LispVal
+listToVector (List xs) = return $ Vector $ listArray (0, length xs - 1) xs
+listToVector notList   = throwError $ TypeMismatch "list" notList
 
 car :: [LispVal] -> ThrowsError LispVal
 car [List (x:xs)]         = return x
@@ -234,11 +248,11 @@ cons [x, DottedList xs tl] = return $ DottedList (x:xs) tl
 cons [x, y]                = return $ DottedList [x] y
 cons badArgs               = throwError $ NumArgs 2 badArgs
 
-list :: [LispVal] -> ThrowsError LispVal
-list xs = return $ List xs
+vector :: [LispVal] -> ThrowsError LispVal
+vector xs = return $ Vector $ listArray (0, length xs - 1) xs
 
-listEquals :: ([LispVal] -> ThrowsError LispVal) -> LispVal -> LispVal -> ThrowsError LispVal
-listEquals eq (List arg1) (List arg2) = return $ Bool $ (length arg1 == length arg2) &&
+listEquals :: ([LispVal] -> ThrowsError LispVal) -> [LispVal] -> [LispVal] -> ThrowsError LispVal
+listEquals eq arg1 arg2 = return $ Bool $ (length arg1 == length arg2) &&
     (all eqPair $ zip arg1 arg2) where
         eqPair (x1, x2) = case eq [x1, x2] of
             Left err -> False
@@ -248,13 +262,14 @@ eqv :: [LispVal] -> ThrowsError LispVal
 eqv [Bool arg1, Bool arg2] = return $ Bool $ arg1 == arg2
 eqv [Atom arg1, Atom arg2] = return $ Bool $ arg1 == arg2
 eqv [Char arg1, Char arg2] = return $ Bool $ arg1 == arg2
-eqv [String arg1, String arg2] = return $ Bool $ arg1 == arg2
-eqv [Number arg1, Number arg2] = return $ Bool $ arg1 == arg2
-eqv [Ratio arg1, Ratio arg2]   = return $ Bool $ arg1 == arg2
-eqv [Float arg1, Float arg2]   = return $ Bool $ arg1 == arg2
+eqv [String arg1, String arg2]   = return $ Bool $ arg1 == arg2
+eqv [Number arg1, Number arg2]   = return $ Bool $ arg1 == arg2
+eqv [Ratio arg1, Ratio arg2]     = return $ Bool $ arg1 == arg2
+eqv [Float arg1, Float arg2]     = return $ Bool $ arg1 == arg2
 eqv [Complex arg1, Complex arg2] = return $ Bool $ arg1 == arg2
-eqv [DottedList xs x, DottedList ys y] = eqv [List $ xs ++ [x], List $ ys ++ [y]]
-eqv [l1@(List _), l2@(List _)] = listEquals eqv l1 l2
+eqv [DottedList xs x, DottedList ys y] = listEquals eqv (xs++[x]) (ys++[y])
+eqv [Vector xs, Vector ys]             = listEquals eqv (elems xs) (elems ys)
+eqv [List xs, List ys]                 = listEquals eqv xs ys
 eqv [_ , _] = return $ Bool False
 eqv badArgs = throwError $ NumArgs 2 badArgs
 
@@ -268,8 +283,9 @@ unpackEquals arg1 arg2 (AnyUnpacker unpacker) = do
     `catchError` (const $ return False)
 
 equal :: [LispVal] -> ThrowsError LispVal
-equal [DottedList xs x, DottedList ys y] = equal [List $ xs ++ [x], List $ ys ++ [y]]
-equal [l1@(List _), l2@(List _)] = listEquals equal l1 l2
+equal [DottedList xs x, DottedList ys y] = listEquals equal (xs++[x]) (ys++[y])
+equal [Vector xs, Vector ys]             = listEquals equal (elems xs) (elems ys)
+equal [List xs, List ys]                 = listEquals equal xs ys
 equal [arg1, arg2] = do
     primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2)
                        [AnyUnpacker unpackNum, AnyUnpacker unpackRat,
