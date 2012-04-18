@@ -20,7 +20,7 @@ eval env val@(Complex _) = return val
 eval env val@(Bool _)    = return val
 eval env (Atom name)     = getVar env name
 eval env (List [Atom "quote", val]) = return val
-eval env (List [Atom "quasiquote", val]) = evalQuasiquote env val
+eval env (List [Atom "quasiquote", val]) = evalQuasiquote 1 env val
 eval env (List [Atom "let", Atom var, form, expr]) = evalLet env var form expr
 eval env (List [Atom "with", List bindings, expr]) = evalWith env bindings expr
 eval env (List (Atom "begin" : exprs)) = evalBegin env exprs
@@ -135,13 +135,23 @@ evalCase' env key (List [obj, expr] : rest) = do
         then eval env expr
         else evalCase' env key rest
 
-evalQuasiquote :: Env -> LispVal -> IOThrowsError LispVal
-evalQuasiquote env (List [Atom "unquote", val]) = eval env val
-evalQuasiquote env (List vals) = liftM List $ mapM (evalQuasiquote env) vals
-evalQuasiquote env val = return val
-{-  This doesn't work at the moment:
-    * Doesn't deal with unquote-splicing
-    * Doesn't deal with nested levels of quote/quasiquote -}
+evalQuasiquote :: Int -> Env -> LispVal -> IOThrowsError LispVal
+evalQuasiquote 0 env val = eval env val
+evalQuasiquote n env (List [Atom "quasiquote", val]) = evalQuasiquote (n+1) env val
+evalQuasiquote n env (List [Atom "unquote", val])    = evalQuasiquote (n-1) env val
+evalQuasiquote n env (List vals) = liftM (List . concat) $ mapM (eqqList n env) vals
+evalQuasiquote n env val = return val
+
+eqqList :: Int -> Env -> LispVal -> IOThrowsError [LispVal]
+eqqList 0 env val = liftM return $ eval env val
+eqqList n env (List [Atom "quasiquote", val]) = liftM return $ evalQuasiquote (n+1) env val
+eqqList n env (List [Atom "unquote", val])    = liftM return $ evalQuasiquote (n-1) env val
+eqqList n env (List [Atom "unquotesplicing", val]) = do
+    result <- evalQuasiquote (n-1) env val
+    case result of
+        (List xs) -> return xs
+        notList   -> throwError $ TypeMismatch "list" notList
+eqqList n env val = return $ return val
 
 makeFunc :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
 makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
