@@ -1,8 +1,8 @@
-{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE NoMonomorphismRestriction, TypeSynonymInstances, FlexibleInstances #-}
 
 module LispVal (
       LispVal (Atom,List,DottedList,Vector,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,Func,IOFunc,Port)
-    , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,Default)
+    , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,OutOfRange,Default)
     , ThrowsError
     , IOThrowsError
     , Env
@@ -45,6 +45,7 @@ data LispError = NumArgs Integer [LispVal]
                | NotFunction String String
                | TypeMismatch String LispVal
                | UnboundVar String String
+               | OutOfRange Int (Int, Int) LispVal
                | Default String
 
 type ThrowsError = Either LispError
@@ -63,7 +64,7 @@ showVal (Bool True) = "#t"
 showVal (Bool False) = "#f"
 showVal (List contents) = "(" ++ unwordsList contents ++ ")"
 showVal (DottedList hd tl) = "(" ++ unwordsList hd ++ " . " ++ showVal tl ++ ")"
-showVal (Vector contents) = "#(" ++ unwordsList (elems contents) ++ ")"
+showVal (Vector arr) = "#(" ++ unwordsList (elems arr) ++ ")"
 showVal (PrimitiveFunc _) = "<primitive>"
 showVal (Func { params = args, vararg = varargs, body = body, closure = env }) = 
     "(lambda (" ++ unwords args ++
@@ -75,3 +76,14 @@ showVal (Port _) = "<IO port>"
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
+
+-- These guys are here for debugging - it allows me to derive an instance for LispVal that will show me the underlying Haskell representation rather than the pretty-printed Haskeme version. For these to work correctly I need the TypeSynonymInstances and FlexibleInstances pragmas. If we're not using this debug capability then those pragmas don't need to be there.
+
+instance Show Env where
+  show _ = "<environment>"
+
+instance Show ([LispVal] -> ThrowsError LispVal) where
+  show _ = "<primitive>"
+
+instance Show ([LispVal] -> IOThrowsError LispVal) where
+  show _ = "<ioPrimitive>"

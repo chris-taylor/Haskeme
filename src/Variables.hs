@@ -32,20 +32,32 @@ setCar envRef var val = do
     env <- liftIO $ readIORef envRef
     maybe (throwError $ UnboundVar "Setting car of an unbound variable" var)
           (\varRef -> do
-            (List (car : cdr)) <- liftIO $ readIORef varRef
-            liftIO $ writeIORef varRef (List (val : cdr)))
+            oldVal <- liftIO $ readIORef varRef
+            case oldVal of
+                List (_ : cdr)          -> liftIO $ writeIORef varRef (List (val : cdr))
+                DottedList (_ : cdr) tl -> liftIO $ writeIORef varRef (DottedList (val : cdr) tl)
+                notPair -> throwError $ TypeMismatch "pair" notPair)
           (lookup var env)
     return val
 
 setCdr :: Env -> String -> LispVal -> IOThrowsError LispVal
-setCdr envRef var (List val) = do
+setCdr envRef var val = do
     env <- liftIO $ readIORef envRef
     maybe (throwError $ UnboundVar "Setting cdr of an unbound variable" var)
           (\varRef -> do
-            (List (car : cdr)) <- liftIO $ readIORef varRef
-            liftIO $ writeIORef varRef (List (car : val)))
+            oldVal <- liftIO $ readIORef varRef
+            case oldVal of
+                List (car : _) -> case val of
+                    List xs          -> liftIO $ writeIORef varRef (List (car : xs))
+                    DottedList xs tl -> liftIO $ writeIORef varRef (DottedList (car : xs) tl)
+                    _                -> liftIO $ writeIORef varRef (DottedList [car] val)
+                DottedList (car : _) _ -> case val of
+                    List xs          -> liftIO $ writeIORef varRef (List (car : xs))
+                    DottedList xs tl -> liftIO $ writeIORef varRef (DottedList (car : xs) tl)
+                    _                -> liftIO $ writeIORef varRef (DottedList [car] val)
+                notPair -> throwError $ TypeMismatch "pair" notPair)
           (lookup var env)
-    return (List val)
+    return val
 
 defineVar :: Env -> String -> LispVal -> IOThrowsError LispVal
 defineVar envRef var value = do

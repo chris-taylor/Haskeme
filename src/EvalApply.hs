@@ -1,6 +1,7 @@
 module EvalApply (eval, apply, load) where
 
 import Control.Monad.Error
+import Data.Array
 
 import LispVal
 import LispError
@@ -19,7 +20,7 @@ eval env val@(Complex _) = return val
 eval env val@(Bool _)    = return val
 eval env (Atom name)     = getVar env name
 eval env (List [Atom "quote", val]) = return val
-eval env (List [Atom "quasiquote", val]) = evalQuasiquote env val
+eval env (List [Atom "quasiquote", val]) = evalQuasiquote 1 env val
 eval env (List [Atom "let", Atom var, form, expr]) = evalLet env var form expr
 eval env (List [Atom "with", List bindings, expr]) = evalWith env bindings expr
 eval env (List (Atom "begin" : exprs)) = evalBegin env exprs
@@ -64,11 +65,20 @@ apply (Func params varargs body closure) args =
         bindVarArgs arg env = case arg of
             Just argName -> liftIO $ bindVars env [(argName, List $ remainingArgs)]
             Nothing -> return env
-apply (String str) [Number n] = if fromInteger n >= length str
-                                    then return nil
-                                    else return $ Char $ str !! (fromInteger n)
+
+apply (String str) [Number n] = let index = fromInteger n in
+    if index < length str
+        then return $ Char $ str !! index
+        else throwError $ OutOfRange index (0, length str - 1) (String str)
 apply (String str) [arg]      = throwError $ TypeMismatch "integer" arg
 apply (String str) args       = throwError $ NumArgs 1 args
+
+apply (Vector arr) [Number n] = let index = fromInteger n in
+    if index < (snd $ bounds arr) + 1
+        then return $ arr ! index
+        else throwError $ OutOfRange index (bounds arr) (Vector arr)
+apply (Vector arr) [arg]      = throwError $ TypeMismatch "integer" arg
+apply (Vector arr) args       = throwError $ NumArgs 1 args
 
 -- Helper functions
 
@@ -125,13 +135,24 @@ evalCase' env key (List [obj, expr] : rest) = do
         then eval env expr
         else evalCase' env key rest
 
-evalQuasiquote :: Env -> LispVal -> IOThrowsError LispVal
-evalQuasiquote env (List [Atom "unquote", val]) = eval env val
-evalQuasiquote env (List vals) = liftM List $ mapM (evalQuasiquote env) vals
-evalQuasiquote env val = return val
-{-  This doesn't work at the moment:
-    * Doesn't deal with unquote-splicing
-    * Doesn't deal with nested levels of quote/quasiquote -}
+evalQuasiquote :: Int -> Env -> LispVal -> IOThrowsError LispVal
+evalQuasiquote 0 env val = eval env val
+evalQuasiquote n env (List [Atom "quasiquote", val]) = evalQuasiquote (n+1) env val
+evalQuasiquote n env (List [Atom "unquote", val])    = evalQuasiquote (n-1) env val
+evalQuasiquote n env (List vals) = liftM (List . concat) $ mapM (eqqList n env) vals
+evalQuasiquote n env val = return val
+
+eqqList :: Int -> Env -> LispVal -> IOThrowsError [LispVal]
+eqqList 0 env val = liftM return $ eval env val
+eqqList n env (List [Atom "quasiquote", val]) = liftM return $ evalQuasiquote (n+1) env val
+eqqList n env (List [Atom "unquote", val])    = liftM return $ evalQuasiquote (n-1) env val
+eqqList n env (List [Atom "unquotesplicing", val]) = do
+    result <- evalQuasiquote (n-1) env val
+    case result of
+        (List xs) -> return xs
+        notList   -> throwError $ TypeMismatch "list" notList
+eqqList n env (List vals) = liftM (return . List . concat) $ mapM (eqqList n env) vals
+eqqList n env val = return $ return val
 
 makeFunc :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
 makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
@@ -154,6 +175,7 @@ eqv (Number arg1) (Number arg2) = arg1 == arg2
 eqv (Ratio arg1) (Ratio arg2) = arg1 == arg2
 eqv (Float arg1) (Float arg2) = arg1 == arg2
 eqv (Complex arg1) (Complex arg2) = arg1 == arg2
+eqv (Vector xs) (Vector ys) = eqv (List $ elems xs) (List $ elems ys)
 eqv (DottedList xs x) (DottedList ys y) = eqv (List $ xs ++ [x]) (List $ ys ++ [y])
 eqv (List xs) (List ys) = length xs == length ys && and (map (uncurry eqv) $ zip xs ys)
 eqv _ _ = False
