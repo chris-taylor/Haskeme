@@ -21,6 +21,7 @@ type Env = IORef [(String, IORef LispVal)]
 data LispVal = Atom String
              | List [LispVal]
              | DottedList [LispVal] LispVal
+             | Vector (Array Int LispVal)
              | Number Integer
              | Ratio Rational
              | Float Double
@@ -61,6 +62,7 @@ showVal (Bool True) = "#t"
 showVal (Bool False) = "#f"
 showVal (List contents) = "(" ++ unwordsList contents ++ ")"
 showVal (DottedList hd tl) = "(" ++ unwordsList hd ++ " . " ++ showVal tl ++ ")"
+showVal (Vector arr) = "#(" ++ unwordsList (elems arr) ++ ")"
 showVal (PrimitiveFunc _) = "<primitive>"
 showVal (Func { params = args, vararg = varargs, body = body, closure = env }) = 
     "(lambda (" ++ unwords args ++
