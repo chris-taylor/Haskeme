@@ -12,7 +12,6 @@ I've also borrowed some ideas from Arc:
 
 * Improve numerical handling:
   - Promotion/coercion for numeric types (probably requires a Numeric module)
-* Quasiquote/unquote/unquote splicing (parsing and evaluation)
 * Data types:
   - Hash
   - Stream
