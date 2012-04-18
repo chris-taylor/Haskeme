@@ -100,3 +100,11 @@
 (define (cddr x)
     (cdr (cdr x)))
 
+(define (replicate n val)
+    (if (= n 0) '()
+        (cons val (replicate (- n 1) val))))
+
+(define (make-vector n val)
+    (apply vector (replicate n val)))
+
+
