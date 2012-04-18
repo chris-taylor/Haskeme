@@ -1,6 +1,7 @@
 module EvalApply (eval, apply, load) where
 
 import Control.Monad.Error
+import Data.Array
 
 import LispVal
 import LispError
@@ -64,11 +65,20 @@ apply (Func params varargs body closure) args =
         bindVarArgs arg env = case arg of
             Just argName -> liftIO $ bindVars env [(argName, List $ remainingArgs)]
             Nothing -> return env
-apply (String str) [Number n] = if fromInteger n >= length str
-                                    then return nil
-                                    else return $ Char $ str !! (fromInteger n)
+
+apply (String str) [Number n] = let index = fromInteger n in
+    if index < length str
+        then return $ Char $ str !! index
+        else throwError $ OutOfRange index (0, length str - 1) (String str)
 apply (String str) [arg]      = throwError $ TypeMismatch "integer" arg
 apply (String str) args       = throwError $ NumArgs 1 args
+
+apply (Vector arr) [Number n] = let index = fromInteger n in
+    if index < (snd $ bounds arr) + 1
+        then return $ arr ! index
+        else throwError $ OutOfRange index (bounds arr) (Vector arr)
+apply (Vector arr) [arg]      = throwError $ TypeMismatch "integer" arg
+apply (Vector arr) args       = throwError $ NumArgs 1 args
 
 -- Helper functions
 
@@ -154,6 +164,7 @@ eqv (Number arg1) (Number arg2) = arg1 == arg2
 eqv (Ratio arg1) (Ratio arg2) = arg1 == arg2
 eqv (Float arg1) (Float arg2) = arg1 == arg2
 eqv (Complex arg1) (Complex arg2) = arg1 == arg2
+eqv (Vector xs) (Vector ys) = eqv (List $ elems xs) (List $ elems ys)
 eqv (DottedList xs x) (DottedList ys y) = eqv (List $ xs ++ [x]) (List $ ys ++ [y])
 eqv (List xs) (List ys) = length xs == length ys && and (map (uncurry eqv) $ zip xs ys)
 eqv _ _ = False
