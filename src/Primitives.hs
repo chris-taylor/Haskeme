@@ -13,7 +13,8 @@ import LispNum
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = numericPrimitives ++ 
-             [ ("symbol?", unaryBoolOp isSymbol)
+             [ ("stdlib", const $ return (String "../stdlib/stdlib.scm"))
+             , ("symbol?", unaryBoolOp isSymbol)
              , ("pair?", unaryBoolOp isPair)
              , ("boolean?", unaryBoolOp isBool)
              , ("char?", unaryBoolOp isChar)
@@ -70,6 +71,7 @@ unpackStr notString  = throwError $ TypeMismatch "string" notString
 unpackBool :: LispVal -> ThrowsError Bool
 unpackBool (Bool b) = return b
 unpackBool notBool  = throwError $ TypeMismatch "boolean" notBool
+
 unpackNum :: LispVal -> ThrowsError Integer
 unpackNum (Number n)    = return n
 unpackNum (Ratio n)     = if denominator n == 1
