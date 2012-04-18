@@ -1,7 +1,7 @@
 module LispParser (readExpr, readExprList) where
 
 import Control.Monad.Error
-import Text.ParserCombinators.Parsec hiding (spaces)
+import Text.ParserCombinators.Parsec
 import Numeric (readOct, readHex, readFloat)
 import Ratio
 import Complex
@@ -15,7 +15,7 @@ readExpr :: String -> ThrowsError LispVal
 readExpr = readOrThrow parseExpr
 
 readExprList :: String -> ThrowsError [LispVal]
-readExprList = readOrThrow (endBy parseExpr spaces)
+readExprList = readOrThrow (sepBy parseExpr spaces1)
 
 readOrThrow :: Parser a -> String -> ThrowsError a
 readOrThrow parser input = case parse parser "lisp" input of
@@ -35,14 +35,8 @@ parseExpr = parseAtom
         <|> parseQuasiquote
         <|> try parseUnquoteSplicing
         <|> parseUnquote
-        <|> try (do string "#("
-                    x <- parseVector
-                    char ')'
-                    return x)
-        <|> do char '('
-               x <- try parseList <|> parseDottedList
-               char ')'
-               return x
+        <|> parseVector
+        <|> parseList
 
 parseAtom :: Parser LispVal
 parseAtom = do
@@ -151,17 +145,20 @@ parseUnquote = do
     return $ List [Atom "unquote", x]
 
 parseList :: Parser LispVal
-parseList = liftM List $ sepBy parseExpr spaces
-
-parseDottedList :: Parser LispVal
-parseDottedList = do
-    hd <- endBy parseExpr spaces
-    tl <- char '.' >> spaces >> parseExpr
-    return $ DottedList hd tl
+parseList = do
+    char '(' >> spaces
+    hd <- parseExpr `sepEndBy` spaces1
+    do char '.' >> spaces1
+       tl <- parseExpr
+       spaces >> char ')'
+       return $ DottedList hd tl
+     <|> (spaces >> char ')' >> (return $ List hd))
 
 parseVector :: Parser LispVal
 parseVector = do
-    vals <- sepBy parseExpr spaces
+    string "#(" >> spaces
+    vals <- sepEndBy parseExpr spaces1
+    spaces >> char ')'
     return $ Vector (listArray (0, length vals - 1) vals)
 
 -- Parsing helper functions
@@ -169,8 +166,8 @@ parseVector = do
 symbol :: Parser Char
 symbol = oneOf "!$%&|*+-/:<=>?@^_~"
 
-spaces :: Parser ()
-spaces = skipMany1 space
+spaces1 :: Parser ()
+spaces1 = skipMany1 space
 
 escapedChar :: Parser Char
 escapedChar = do
