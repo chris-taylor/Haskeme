@@ -10,8 +10,6 @@ I've also borrowed some ideas from Arc:
 
 ## Aims and next steps:
 
-* Improve numerical handling:
-  - Promotion/coercion for numeric types (probably requires a Numeric module)
 * Data types:
   - Hash
   - Stream
@@ -19,6 +17,7 @@ I've also borrowed some ideas from Arc:
   - Symbol manipulation
   - String manipulation
   - Numeric functions (trigonometry, sqrt, exp/log etc)
+* Error handling for numeric operations
 * Macros
 * Tail call optimization
 * Standard library
