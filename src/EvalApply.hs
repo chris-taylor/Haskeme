@@ -47,6 +47,7 @@ eval env (List (function : args)) = do
     func <- eval env function
     argVals <- mapM (eval env) args
     apply func argVals
+eval env (List []) = return $ List []
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
 -- Application

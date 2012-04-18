@@ -1,7 +1,7 @@
 {-# LANGUAGE NoMonomorphismRestriction, TypeSynonymInstances, FlexibleInstances #-}
 
 module LispVal (
-      LispVal (Atom,List,DottedList,Vector,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,Func,IOFunc,Port)
+      LispVal (Atom,List,DottedList,Vector,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,Func,IOFunc,Port,Macro)
     , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,OutOfRange,Default)
     , ThrowsError
     , IOThrowsError
@@ -35,6 +35,8 @@ data LispVal = Atom String
                     , body :: [LispVal], closure :: Env }
              | IOFunc ([LispVal] -> IOThrowsError LispVal)
              | Port Handle
+             | Macro { macroParams :: [String], macroVararg :: Maybe String
+                     , macroBody :: [LispVal], macroClosure :: Env }
 
 instance Show LispVal where
     show = showVal
@@ -73,6 +75,7 @@ showVal (Func { params = args, vararg = varargs, body = body, closure = env }) =
             Just arg -> " . " ++ arg) ++ ") ...)"
 showVal (IOFunc _) = "<IO primitive>"
 showVal (Port _) = "<IO port>"
+showVal (Macro {}) = "<macro>"
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
