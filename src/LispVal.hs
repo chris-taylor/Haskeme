@@ -45,7 +45,7 @@ data LispError = NumArgs Integer [LispVal]
                | NotFunction String String
                | TypeMismatch String LispVal
                | UnboundVar String String
-               | OutOfRange String Int (Int, Int)
+               | OutOfRange Int (Int, Int) LispVal
                | Default String
 
 type ThrowsError = Either LispError
