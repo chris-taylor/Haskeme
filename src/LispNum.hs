@@ -1,6 +1,6 @@
 {-# LANGUAGE ExistentialQuantification, Rank2Types #-}
 
-module LispNum where
+module LispNum (numericPrimitives) where
 
 import Control.Monad.Error
 import Control.Applicative
