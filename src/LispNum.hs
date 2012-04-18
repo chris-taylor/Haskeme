@@ -59,6 +59,7 @@ numericPrimitives =
     , ("exp", floatingUnOp exp)
     , ("log", floatingUnOp log)
     , ("sqrt", floatingUnOp sqrt)
+    , ("expt", floatingBinOp (**))
     , ("div", integralBinOp div)
     , ("mod", integralBinOp mod)
     , ("quotient", integralBinOp quot)
@@ -76,6 +77,9 @@ fractionalBinOp op params = return $ foldl1 (promoteFractionalBinaryOp op) param
 floatingUnOp :: (forall a. Floating a => a -> a) -> [LispVal] -> ThrowsError LispVal
 floatingUnOp op [arg] = return $ (promoteFloatingUnaryOp op) arg
 floatingUnOp _  args  = throwError $ NumArgs 1 args
+
+floatingBinOp :: (forall a. Floating a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
+floatingBinOp op args = return $ foldl1 (promoteFloatingBinaryOp op) args
 
 promoteNumericBinaryOp :: (forall a. Num a => a -> a -> a) -> LispVal -> LispVal -> LispVal
 promoteNumericBinaryOp op x y = case typeOf x `max` typeOf y of
@@ -98,3 +102,8 @@ promoteFloatingUnaryOp :: (forall a. Floating a => a -> a) -> LispVal -> LispVal
 promoteFloatingUnaryOp op x = case typeOf x of
     ComplexType -> Complex (op $ asComplex x)
     _           -> Float (op $ asFloat x)
+
+promoteFloatingBinaryOp :: (forall a. Floating a => a -> a -> a) -> LispVal -> LispVal -> LispVal
+promoteFloatingBinaryOp op x y = case typeOf x `max` typeOf y of
+    ComplexType -> Complex (asComplex x `op` asComplex y)
+    _           -> Float (asFloat x `op` asFloat y)
