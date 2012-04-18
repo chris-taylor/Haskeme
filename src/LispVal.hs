@@ -1,7 +1,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 module LispVal (
-      LispVal (Atom,List,DottedList,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,Func,IOFunc,Port)
+      LispVal (Atom,List,DottedList,Vector,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,Func,IOFunc,Port)
     , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,Default)
     , ThrowsError
     , IOThrowsError
@@ -11,6 +11,7 @@ module LispVal (
 
 import IO
 import Data.IORef
+import Data.Array
 import Ratio
 import Complex
 import Control.Monad.Error
@@ -21,6 +22,7 @@ type Env = IORef [(String, IORef LispVal)]
 data LispVal = Atom String
              | List [LispVal]
              | DottedList [LispVal] LispVal
+             | Vector (Array Int LispVal)
              | Number Integer
              | Ratio Rational
              | Float Double
@@ -61,6 +63,7 @@ showVal (Bool True) = "#t"
 showVal (Bool False) = "#f"
 showVal (List contents) = "(" ++ unwordsList contents ++ ")"
 showVal (DottedList hd tl) = "(" ++ unwordsList hd ++ " . " ++ showVal tl ++ ")"
+showVal (Vector contents) = "#(" ++ unwordsList (elems contents) ++ ")"
 showVal (PrimitiveFunc _) = "<primitive>"
 showVal (Func { params = args, vararg = varargs, body = body, closure = env }) = 
     "(lambda (" ++ unwords args ++

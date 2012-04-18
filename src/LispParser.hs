@@ -3,6 +3,7 @@ module LispParser (readExpr, readExprList) where
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Numeric (readOct, readHex, readFloat)
+import Data.Array
 import Ratio
 import Complex
 import Char (digitToInt)
@@ -34,6 +35,10 @@ parseExpr = parseAtom
         <|> parseQuasiquote
         <|> try parseUnquoteSplicing
         <|> parseUnquote
+        <|> try (do string "#("
+                    x <- parseVector
+                    char ')'
+                    return x)
         <|> do char '('
                x <- try parseList <|> parseDottedList
                char ')'
@@ -59,6 +64,11 @@ parseBool = do
     return $ case x of
                 't' -> Bool True
                 'f' -> Bool False
+
+parseVector :: Parser LispVal
+parseVector = do
+    arrayVals <- sepBy parseExpr spaces
+    return $ Vector (listArray (0, (length arrayVals - 1)) arrayVals)
 
 parseComplex :: Parser LispVal
 parseComplex = do
