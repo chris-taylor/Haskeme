@@ -5,6 +5,7 @@ import Text.ParserCombinators.Parsec hiding (spaces)
 import Numeric (readOct, readHex, readFloat)
 import Ratio
 import Complex
+import Data.Array
 import Char (digitToInt)
 
 import LispVal
@@ -34,6 +35,10 @@ parseExpr = parseAtom
         <|> parseQuasiquote
         <|> try parseUnquoteSplicing
         <|> parseUnquote
+        <|> try (do string "#("
+                    x <- parseVector
+                    char ')'
+                    return x)
         <|> do char '('
                x <- try parseList <|> parseDottedList
                char ')'
@@ -153,6 +158,11 @@ parseDottedList = do
     hd <- endBy parseExpr spaces
     tl <- char '.' >> spaces >> parseExpr
     return $ DottedList hd tl
+
+parseVector :: Parser LispVal
+parseVector = do
+    vals <- sepBy parseExpr spaces
+    return $ Vector (listArray (0, length vals - 1) vals)
 
 -- Parsing helper functions
 
