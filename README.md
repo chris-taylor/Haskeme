@@ -14,9 +14,8 @@ I've also borrowed some ideas from Arc:
   - Promotion/coercion for numeric types (probably requires a Numeric module)
 * Quasiquote/unquote/unquote splicing (parsing and evaluation)
 * Data types:
-  - Vector
   - Hash
-  - Type testing, eg array?, hash?
+  - Stream
 * Functions:
   - Symbol manipulation
   - String manipulation
@@ -25,6 +24,5 @@ I've also borrowed some ideas from Arc:
 * Tail call optimization
 * Standard library
 * Generic truth and falsity
-* Index into strings/arrays/hashes with function application
 * Comments
 * Make the interpreter R5RS compliant
