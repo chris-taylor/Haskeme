@@ -40,8 +40,6 @@ I've also borrowed some ideas from Arc and Q:
   - Stream
 * Error handling for numeric operations
 * Tail call optimization
-* Truthy values for non-boolean types
-* Intelligent if statements
 * Literal unary functions, e.g. with `[+ _ 1]` notation
 * Comments
 * R5RS compliance
