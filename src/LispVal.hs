@@ -1,12 +1,12 @@
 {-# LANGUAGE NoMonomorphismRestriction, TypeSynonymInstances, FlexibleInstances #-}
 
 module LispVal (
-      LispVal (Atom,List,DottedList,Vector,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,Func,IOFunc,Port,Macro)
+      LispVal (Atom,List,DottedList,Vector,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,Func,IOFunc,Port)
     , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,OutOfRange,Default)
     , ThrowsError
     , IOThrowsError
     , Env
-    , showVal, unwordsList
+    , showVal, unwordsList, makeNormalFunc, makeVarArgs
     ) where
 
 import IO
@@ -35,8 +35,6 @@ data LispVal = Atom String
                     , body :: [LispVal], closure :: Env }
              | IOFunc ([LispVal] -> IOThrowsError LispVal)
              | Port Handle
-             | Macro { macroParams :: [String], macroVararg :: Maybe String
-                     , macroBody :: [LispVal], macroClosure :: Env }
 
 instance Show LispVal where
     show = showVal
@@ -75,10 +73,18 @@ showVal (Func { params = args, vararg = varargs, body = body, closure = env }) =
             Just arg -> " . " ++ arg) ++ ") ...)"
 showVal (IOFunc _) = "<IO primitive>"
 showVal (Port _) = "<IO port>"
-showVal (Macro {}) = "<macro>"
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
+
+makeFunc :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
+makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
+
+makeNormalFunc :: (Monad m) => Env -> [LispVal] -> [LispVal] -> m LispVal
+makeNormalFunc = makeFunc Nothing
+
+makeVarArgs :: (Monad m) => LispVal -> Env -> [LispVal] -> [LispVal] -> m LispVal
+makeVarArgs = makeFunc . Just . showVal
 
 -- These guys are here for debugging - it allows me to derive an instance for LispVal that will show me the underlying Haskell representation rather than the pretty-printed Haskeme version. For these to work correctly I need the TypeSynonymInstances and FlexibleInstances pragmas. If we're not using this debug capability then those pragmas don't need to be there.
 
