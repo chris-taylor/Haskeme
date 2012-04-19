@@ -7,7 +7,7 @@ import Data.Array
 import Ratio
 import Complex
 
-import LispVal
+import LispVal hiding (eqv)
 import LispError
 import LispNum
 

@@ -4,6 +4,7 @@ import Control.Monad.Error
 import Text.ParserCombinators.Parsec
 import Numeric (readOct, readHex, readFloat)
 import Data.Array
+import qualified Data.Map as Map
 import Ratio
 import Complex
 import Data.Array
@@ -37,6 +38,7 @@ parseExpr = parseAtom
         <|> try parseUnquoteSplicing
         <|> parseUnquote
         <|> parseVector
+        <|> parseHash
         <|> parseList
 
 parseAtom :: Parser LispVal
@@ -157,15 +159,32 @@ parseList = do
 
 parseVector :: Parser LispVal
 parseVector = do
-    string "#(" >> spaces
+    string "$(" >> spaces
     vals <- sepEndBy parseExpr spaces1
     spaces >> char ')'
     return $ Vector (listArray (0, length vals - 1) vals)
 
+parseHash :: Parser LispVal
+parseHash = do
+    string "#(" >> spaces
+    vals <- sepEndBy parseExpr spaces1
+    spaces >> char ')'
+    return $ Hash $ Map.fromList $ pairs vals
+
+pairs :: [a] -> [(a,a)]
+pairs [ ]            = []
+pairs [_]            = []
+pairs (x : y : rest) = (x, y) : pairs rest
+
+unpairs :: [(a,a)] -> [a]
+unpairs [ ] = []
+unpairs [_] = []
+unpairs ((x,y) : rest) = x : y : unpairs rest
+
 -- Parsing helper functions
 
 symbol :: Parser Char
-symbol = oneOf "!$%&|*+-/:<=>?@^_~"
+symbol = oneOf "!%&|*+-/:<=>?@^_~"
 
 spaces1 :: Parser ()
 spaces1 = skipMany1 space

@@ -2,6 +2,7 @@ module EvalApply (eval, apply, load) where
 
 import Control.Monad.Error
 import Data.Array
+import qualified Data.Map as Map
 
 import LispVal
 import LispError
@@ -18,6 +19,8 @@ eval env val@(Ratio _)   = return val
 eval env val@(Float _)   = return val
 eval env val@(Complex _) = return val
 eval env val@(Bool _)    = return val
+eval env val@(Vector _)  = return val
+eval env val@(Hash _)    = return val
 eval env (Atom name)     = getVar env name
 eval env (List [Atom "quote", val]) = return val
 eval env (List [Atom "quasiquote", val]) = evalQuasiquote 1 env val
@@ -57,6 +60,7 @@ apply (Func  params varargs body closure) args = applyFunc params varargs body c
 apply (Macro params varargs body closure) args = applyFunc params varargs body closure args
 apply (String str) args = applyString str args
 apply (Vector arr) args = applyVector arr args
+apply (Hash hash) args  = applyHash hash args
 
 applyFunc :: [String] -> Maybe String -> [LispVal] -> Env -> [LispVal] -> IOThrowsError LispVal
 applyFunc params varargs body closure args = 
@@ -86,6 +90,12 @@ applyVector arr [Number n] = let index = fromInteger n in
         else throwError $ OutOfRange index (bounds arr) (Vector arr)
 applyVector arr [arg]      = throwError $ TypeMismatch "integer" arg
 applyVector arr args       = throwError $ NumArgs 1 args
+
+applyHash :: (Map.Map LispVal LispVal) -> [LispVal] -> IOThrowsError LispVal
+applyHash hash [key] = maybe (throwError $ KeyNotFound key $ Hash hash)
+                             (\value -> return value)
+                             (Map.lookup key hash)
+applyHash hash args  = throwError $ NumArgs 1 args
 
 -- Evaluation of special forms
 
@@ -176,17 +186,3 @@ isFalse _            = False
 
 load :: String -> IOThrowsError [LispVal]
 load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
-
-eqv :: LispVal -> LispVal -> Bool
-eqv (Bool arg1) (Bool arg2) = arg1 == arg2
-eqv (Atom arg1) (Atom arg2) = arg1 == arg2
-eqv (Char arg1) (Char arg2) = arg1 == arg2
-eqv (String arg1) (String arg2) = arg1 == arg2
-eqv (Number arg1) (Number arg2) = arg1 == arg2
-eqv (Ratio arg1) (Ratio arg2) = arg1 == arg2
-eqv (Float arg1) (Float arg2) = arg1 == arg2
-eqv (Complex arg1) (Complex arg2) = arg1 == arg2
-eqv (Vector xs) (Vector ys) = eqv (List $ elems xs) (List $ elems ys)
-eqv (DottedList xs x) (DottedList ys y) = eqv (List $ xs ++ [x]) (List $ ys ++ [y])
-eqv (List xs) (List ys) = length xs == length ys && and (map (uncurry eqv) $ zip xs ys)
-eqv _ _ = False

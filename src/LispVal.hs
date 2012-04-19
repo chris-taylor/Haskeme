@@ -1,17 +1,19 @@
 {-# LANGUAGE NoMonomorphismRestriction, TypeSynonymInstances, FlexibleInstances #-}
 
 module LispVal (
-      LispVal (Atom,List,DottedList,Vector,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,IOFunc,Func,Macro,Port)
-    , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,OutOfRange,Default)
+      LispVal (Atom,List,DottedList,Vector,Hash,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,IOFunc,Func,Macro,Port)
+    , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,OutOfRange,KeyNotFound,Default)
     , ThrowsError
     , IOThrowsError
     , Env
-    , showVal, nil, unwordsList, makeNormalFunc, makeVarArgs, makeNormalMacro, makeVarArgsMacro
+    , showVal, nil, eqv, unwordsList
+    , makeNormalFunc, makeVarArgs, makeNormalMacro, makeVarArgsMacro
     ) where
 
 import IO
 import Data.IORef
 import Data.Array
+import qualified Data.Map as Map
 import Ratio
 import Complex
 import Control.Monad.Error
@@ -23,6 +25,7 @@ data LispVal = Atom String
              | List [LispVal]
              | DottedList [LispVal] LispVal
              | Vector (Array Int LispVal)
+             | Hash (Map.Map LispVal LispVal)
              | Number Integer
              | Ratio Rational
              | Float Double
@@ -48,6 +51,7 @@ data LispError = NumArgs Integer [LispVal]
                | TypeMismatch String LispVal
                | UnboundVar String String
                | OutOfRange Int (Int, Int) LispVal
+               | KeyNotFound LispVal LispVal
                | Default String
 
 type ThrowsError = Either LispError
@@ -66,7 +70,8 @@ showVal (Bool True) = "#t"
 showVal (Bool False) = "#f"
 showVal (List contents) = "(" ++ unwordsList contents ++ ")"
 showVal (DottedList hd tl) = "(" ++ unwordsList hd ++ " . " ++ showVal tl ++ ")"
-showVal (Vector arr) = "#(" ++ unwordsList (elems arr) ++ ")"
+showVal (Vector arr) = "$(" ++ unwordsList (elems arr) ++ ")"
+showVal (Hash hash) = "<hash: " ++ show hash ++ ">"
 showVal (PrimitiveFunc _) = "<primitive>"
 showVal (IOFunc _) = "<IO primitive>"
 showVal (Func { params = args, vararg = varargs }) = showFunc "fn" args varargs
@@ -107,10 +112,43 @@ makeVarArgsMacro = makeMacro . Just . showVal
 -- These guys are here for debugging - it allows me to derive an instance for LispVal that will show me the underlying Haskell representation rather than the pretty-printed Haskeme version. For these to work correctly I need the TypeSynonymInstances and FlexibleInstances pragmas. If we're not using this debug capability then those pragmas don't need to be there.
 
 instance Show Env where
-  show _ = "<environment>"
+    show _ = "<environment>"
 
 instance Show ([LispVal] -> ThrowsError LispVal) where
-  show _ = "<primitive>"
+    show _ = "<primitive>"
 
 instance Show ([LispVal] -> IOThrowsError LispVal) where
-  show _ = "<ioPrimitive>"
+    show _ = "<ioPrimitive>"
+
+instance Eq LispVal where
+    x == y = eqv x y
+
+instance Ord LispVal where
+    compare (Atom x)   (Atom y)   = compare x y
+    compare (String x) (String y) = compare x y
+    compare (Number x) (Number y) = compare x y
+    compare (Ratio x)  (Ratio y)  = compare x y
+    compare (Float x)  (Float y)  = compare x y
+    --compare (Number x) (Number y) = compare x y
+    --compare (Ratio x)  (Ratio y)  = compare x y
+    --compare (Float x)  (Float y)  = compare x y
+    --compare (Atom x)   (Atom y)  = compare x y
+    --compare (String x) (String y) = compare x y
+    --compare (Bool x)   (Bool y)   = compare x y
+    compare _          _          = EQ
+
+-- Equivalance of LispVal
+
+eqv :: LispVal -> LispVal -> Bool
+eqv (Bool arg1) (Bool arg2) = arg1 == arg2
+eqv (Atom arg1) (Atom arg2) = arg1 == arg2
+eqv (Char arg1) (Char arg2) = arg1 == arg2
+eqv (String arg1) (String arg2) = arg1 == arg2
+eqv (Number arg1) (Number arg2) = arg1 == arg2
+eqv (Ratio arg1) (Ratio arg2) = arg1 == arg2
+eqv (Float arg1) (Float arg2) = arg1 == arg2
+eqv (Complex arg1) (Complex arg2) = arg1 == arg2
+eqv (Vector xs) (Vector ys) = eqv (List $ elems xs) (List $ elems ys)
+eqv (DottedList xs x) (DottedList ys y) = eqv (List $ xs ++ [x]) (List $ ys ++ [y])
+eqv (List xs) (List ys) = length xs == length ys && and (map (uncurry eqv) $ zip xs ys)
+eqv _ _ = False
