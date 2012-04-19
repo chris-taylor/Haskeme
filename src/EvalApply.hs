@@ -30,6 +30,7 @@ eval env (List (Atom "case" : key : clauses)) = evalCase env key clauses
 eval env (List [Atom "set!", Atom var, form]) = eval env form >>= setVar env var
 eval env (List [Atom "set-car!", Atom var, form]) = eval env form >>= setCar env var
 eval env (List [Atom "set-cdr!", Atom var, form]) = eval env form >>= setCdr env var
+eval env (List (Atom "load" : params)) = evalLoad env params
 eval env (List [Atom "define", Atom var, form]) = eval env form >>= defineVar env var
 eval env (List (Atom "define" : List (Atom var : params) : body)) = 
     makeNormalFunc env params body >>= defineVar env var
@@ -41,8 +42,6 @@ eval env (List (Atom "lambda" : DottedList params varargs : body)) =
     makeVarArgs varargs env params body
 eval env (List (Atom "lambda" : varargs@(Atom _) : body)) = 
     makeVarArgs varargs env [] body
-eval env (List [Atom "load", String filename]) = 
-    load filename >>= liftM last . mapM (eval env)
 eval env (List (function : args)) = do
     func <- eval env function
     argVals <- mapM (eval env) args
@@ -155,14 +154,13 @@ eqqList n env (List [Atom "unquotesplicing", val]) = do
 eqqList n env (List vals) = liftM (return . List . concat) $ mapM (eqqList n env) vals
 eqqList n env val = return $ return val
 
-makeFunc :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
-makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
-
-makeNormalFunc :: (Monad m) => Env -> [LispVal] -> [LispVal] -> m LispVal
-makeNormalFunc = makeFunc Nothing
-
-makeVarArgs :: (Monad m) => LispVal -> Env -> [LispVal] -> [LispVal] -> m LispVal
-makeVarArgs = makeFunc . Just . showVal
+evalLoad :: Env -> [LispVal] -> IOThrowsError LispVal
+evalLoad env [arg] = do
+    result <- eval env arg
+    case result of
+        (String filename) -> load filename >>= liftM last . mapM (eval env)
+        other             -> throwError $ TypeMismatch "string" other
+evalLoad env args = throwError $ NumArgs 1 args
 
 load :: String -> IOThrowsError [LispVal]
 load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
