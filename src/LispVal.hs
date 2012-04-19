@@ -69,7 +69,7 @@ showVal (DottedList hd tl) = "(" ++ unwordsList hd ++ " . " ++ showVal tl ++ ")"
 showVal (Vector arr) = "#(" ++ unwordsList (elems arr) ++ ")"
 showVal (PrimitiveFunc _) = "<primitive>"
 showVal (IOFunc _) = "<IO primitive>"
-showVal (Func { params = args, vararg = varargs }) = showFunc "lambda" args varargs
+showVal (Func { params = args, vararg = varargs }) = showFunc "fn" args varargs
 showVal (Macro { macroParams = args, macroVararg = varargs }) = showFunc "macro" args varargs
 showVal (Port _) = "<IO port>"
 

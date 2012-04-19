@@ -23,7 +23,7 @@ eval env (List [Atom "quote", val]) = return val
 eval env (List [Atom "quasiquote", val]) = evalQuasiquote 1 env val
 eval env (List [Atom "let", Atom var, form, expr]) = evalLet env var form expr
 eval env (List [Atom "with", List bindings, expr]) = evalWith env bindings expr
-eval env (List (Atom "begin" : exprs)) = evalBegin env exprs
+eval env (List (Atom "do" : exprs)) = evalDo env exprs
 eval env (List [Atom "if", test, conseq, alt]) = evalIf env test conseq alt
 eval env (List (Atom "cond" : clauses)) = evalCond env clauses
 eval env (List (Atom "case" : key : clauses)) = evalCase env key clauses
@@ -31,16 +31,16 @@ eval env (List [Atom "set!", Atom var, form]) = eval env form >>= setVar env var
 eval env (List [Atom "set-car!", Atom var, form]) = eval env form >>= setCar env var
 eval env (List [Atom "set-cdr!", Atom var, form]) = eval env form >>= setCdr env var
 eval env (List (Atom "load" : params)) = evalLoad env params
-eval env (List [Atom "define", Atom var, form]) = eval env form >>= defineVar env var
-eval env (List (Atom "define" : List (Atom var : params) : body)) = 
+eval env (List [Atom "def", Atom var, form]) = eval env form >>= defineVar env var
+eval env (List (Atom "def" : List (Atom var : params) : body)) = 
     makeNormalFunc env params body >>= defineVar env var
-eval env (List (Atom "define" : DottedList (Atom var : params) varargs : body)) =
+eval env (List (Atom "def" : DottedList (Atom var : params) varargs : body)) =
     makeVarArgs varargs env params body >>= defineVar env var
-eval env (List (Atom "lambda" : List params : body)) = 
+eval env (List (Atom "fn" : List params : body)) = 
     makeNormalFunc env params body
-eval env (List (Atom "lambda" : DottedList params varargs : body)) = 
+eval env (List (Atom "fn" : DottedList params varargs : body)) = 
     makeVarArgs varargs env params body
-eval env (List (Atom "lambda" : varargs@(Atom _) : body)) = 
+eval env (List (Atom "fn" : varargs@(Atom _) : body)) = 
     makeVarArgs varargs env [] body
 eval env (List (function : args)) = do
     func <- eval env function
@@ -106,10 +106,10 @@ evalWith env (Atom var : form : rest) expr = do
     newEnv <- liftIO $ bindVars env [(var,val)]
     evalWith newEnv rest expr
 
-evalBegin :: Env -> [LispVal] -> IOThrowsError LispVal
-evalBegin env [] = throwError $ NumArgs 1 [List []]
-evalBegin env [expr] = eval env expr
-evalBegin env (expr : rest) = eval env expr >> evalBegin env rest
+evalDo :: Env -> [LispVal] -> IOThrowsError LispVal
+evalDo env [] = throwError $ NumArgs 1 [List []]
+evalDo env [expr] = eval env expr
+evalDo env (expr : rest) = eval env expr >> evalDo env rest
 
 evalIf :: Env -> LispVal -> LispVal -> LispVal -> IOThrowsError LispVal
 evalIf env predicate conseq alt = do
