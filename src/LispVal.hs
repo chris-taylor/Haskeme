@@ -1,12 +1,12 @@
 {-# LANGUAGE NoMonomorphismRestriction, TypeSynonymInstances, FlexibleInstances #-}
 
 module LispVal (
-      LispVal (Atom,List,DottedList,Vector,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,Func,IOFunc,Port)
+      LispVal (Atom,List,DottedList,Vector,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,IOFunc,Func,Macro,Port)
     , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,OutOfRange,Default)
     , ThrowsError
     , IOThrowsError
     , Env
-    , showVal, unwordsList, makeNormalFunc, makeVarArgs
+    , showVal, unwordsList, makeNormalFunc, makeVarArgs, makeNormalMacro, makeVarArgsMacro
     ) where
 
 import IO
@@ -31,9 +31,11 @@ data LispVal = Atom String
              | String String
              | Bool Bool
              | PrimitiveFunc ([LispVal] -> ThrowsError LispVal)
+             | IOFunc ([LispVal] -> IOThrowsError LispVal)
              | Func { params :: [String], vararg :: Maybe String
                     , body :: [LispVal], closure :: Env }
-             | IOFunc ([LispVal] -> IOThrowsError LispVal)
+             | Macro { macroParams :: [String], macroVararg :: Maybe String
+                     , macroBody :: [LispVal], macroClosure :: Env }
              | Port Handle
 
 instance Show LispVal where
@@ -66,13 +68,17 @@ showVal (List contents) = "(" ++ unwordsList contents ++ ")"
 showVal (DottedList hd tl) = "(" ++ unwordsList hd ++ " . " ++ showVal tl ++ ")"
 showVal (Vector arr) = "#(" ++ unwordsList (elems arr) ++ ")"
 showVal (PrimitiveFunc _) = "<primitive>"
-showVal (Func { params = args, vararg = varargs, body = body, closure = env }) = 
-    "(lambda (" ++ unwords args ++
+showVal (IOFunc _) = "<IO primitive>"
+showVal (Func { params = args, vararg = varargs }) = showFunc "lambda" args varargs
+showVal (Macro { macroParams = args, macroVararg = varargs }) = showFunc "macro" args varargs
+showVal (Port _) = "<IO port>"
+
+showFunc :: String -> [String] -> Maybe String -> String
+showFunc name args varargs = 
+    "(" ++ name ++ " (" ++ unwords args ++
         (case varargs of
             Nothing  -> ""
             Just arg -> " . " ++ arg) ++ ") ...)"
-showVal (IOFunc _) = "<IO primitive>"
-showVal (Port _) = "<IO port>"
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
@@ -85,6 +91,15 @@ makeNormalFunc = makeFunc Nothing
 
 makeVarArgs :: (Monad m) => LispVal -> Env -> [LispVal] -> [LispVal] -> m LispVal
 makeVarArgs = makeFunc . Just . showVal
+
+makeMacro :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
+makeMacro varargs env params body = return $ Macro (map showVal params) varargs body env
+
+makeNormalMacro :: (Monad m) => Env -> [LispVal] -> [LispVal] -> m LispVal
+makeNormalMacro = makeMacro Nothing
+
+makeVarArgsMacro :: (Monad m) => LispVal -> Env -> [LispVal] -> [LispVal] -> m LispVal
+makeVarArgsMacro = makeMacro . Just . showVal
 
 -- These guys are here for debugging - it allows me to derive an instance for LispVal that will show me the underlying Haskell representation rather than the pretty-printed Haskeme version. For these to work correctly I need the TypeSynonymInstances and FlexibleInstances pragmas. If we're not using this debug capability then those pragmas don't need to be there.
 
