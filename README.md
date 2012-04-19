@@ -15,6 +15,12 @@ I've also borrowed some ideas from Arc and Q:
   - Symbol, Pair, Char, String, Boolean
   - Numeric types (Integer, Rational, Float, Complex)
   - Vectors (mutable, constant access time lists)
+  - Functions are first-class values
+* Control flow
+  - Conditionals (`if`, `cond`, `case`)
+  - Statement grouping with `begin`
+  - Local bindings with `let` and `with`
+  - Top-level bindings with `define`
 * Functions:
   - User defined functions, lambdas and lexical closures
   - Full suite of numeric functions (trigonometry, sqrt, exp/log etc)
@@ -24,8 +30,6 @@ I've also borrowed some ideas from Arc and Q:
   - Write to stdout or any file
   - Load libraries from a file
 * Basic macro system:
-  - Multiple levels of quasiquote/unquote/unquote-splicing
-  - Local bindings with 'let' and 'with'
   - Whole language, including user defined functions, available at macro expansion time
 * Standard library
  
@@ -37,6 +41,7 @@ I've also borrowed some ideas from Arc and Q:
 * Error handling for numeric operations
 * Tail call optimization
 * Truthy values for non-boolean types
+* Intelligent if statements
 * Literal unary functions, e.g. with `[+ _ 1]` notation
 * Comments
 * R5RS compliance
