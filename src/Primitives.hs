@@ -4,6 +4,7 @@ module Primitives (primitives) where
 
 import Control.Monad.Error
 import Data.Array
+import qualified Data.Map as Map
 import Ratio
 import Complex
 
@@ -204,8 +205,10 @@ listToVector (List xs) = return $ Vector $ listArray (0, length xs - 1) xs
 listToVector notList   = throwError $ TypeMismatch "list" notList
 
 car :: [LispVal] -> ThrowsError LispVal
-car [List (x:xs)]         = return x
-car [DottedList (x:xs) _] = return x
+car [List (x:_)]          = return x
+car [DottedList (x:_) _]  = return x
+car [String (x:_)]        = return (Char x)
+car [Vector arr]          = return (arr ! 0)
 car [notList]             = throwError $ TypeMismatch "list" notList
 car badArgs               = throwError $ NumArgs 2 badArgs
 
@@ -213,13 +216,20 @@ cdr :: [LispVal] -> ThrowsError LispVal
 cdr [List (x:xs)]           = return $ List xs
 cdr [DottedList [_] x]      = return x
 cdr [DottedList (_ : xs) x] = return $ DottedList xs x
-cdr [notList]               = throwError $ TypeMismatch "list" notList
-cdr badArgs                 = throwError $ NumArgs 2 badArgs
+cdr [String (x:xs)]         = return $ String xs
+cdr [Vector arr]            = return $ Vector $ listArray (0, n-1) (drop 1 els) where
+                                (_, n) = bounds arr
+                                els    = elems arr
+cdr [notList]               = throwError $ TypeMismatch "pair" notList
+cdr badArgs                 = throwError $ NumArgs 1 badArgs
 
 cons :: [LispVal] -> ThrowsError LispVal
-cons [x, List []]          = return $ List [x]
 cons [x, List xs]          = return $ List (x:xs)
 cons [x, DottedList xs tl] = return $ DottedList (x:xs) tl
+cons [Char c, String s]    = return $ String (c:s)
+cons [x, Vector arr]       = return $ Vector $ listArray (0, n+1) (x:els) where
+                                (_, n) = bounds arr
+                                els    = elems arr
 cons [x, y]                = return $ DottedList [x] y
 cons badArgs               = throwError $ NumArgs 2 badArgs
 
