@@ -1,113 +1,113 @@
-(define (not x)
+(def (not x)
     (if x #f #t))
 
-(define (null? obj)
+(def (null? obj)
     (if (eqv? obj '()) #t #f))
 
-(define (list . objs)
+(def (list . objs)
     objs)
 
-(define (id obj)
+(def (id obj)
     obj)
 
-(define (flip func)
-    (lambda (x y) (func y x)))
+(def (flip func)
+    (fn (x y) (func y x)))
 
-(define (curry func x)
-    (lambda (y) (func (list x y))))
+(def (curry func x)
+    (fn (y) (func (list x y))))
 
-(define (compose f g)
-    (lambda (x) (f (g x))))
+(def (compose f g)
+    (fn (x) (f (g x))))
 
-(define zero?
+(def zero?
     (curry = 0))
 
-(define positive?
+(def positive?
     (curry < 0))
 
-(define negative?
+(def negative?
     (curry > 0))
 
-(define (odd? num)
+(def (odd? num)
     (= (mod num 2) 1))
 
-(define (even? num)
+(def (even? num)
     (= (mod num 2) 0))
 
-(define (foldr func end lst)
+(def (foldr func end lst)
     (if (null? lst)
         end
         (func (car lst) (foldr func end (cdr lst)))))
 
-(define (foldl func accum lst)
+(def (foldl func accum lst)
     (if (null? lst)
         accum
         (foldl func (func accum (car lst)) (cdr lst))))
 
-(define fold foldl)
+(def fold foldl)
 
-(define reduce fold)
+(def reduce fold)
 
-(define (unfold func init pred)
+(def (unfold func init pred)
     (if (pred init)
         (cons init '())
         (cons init (unfold func (func init) pred))))
 
-(define (sum . lst)
+(def (sum . lst)
     (fold + 0 lst))
 
-(define (product . lst)
+(def (product . lst)
     (fold * 1 lst))
 
-(define (and . lst)
+(def (and . lst)
     (fold && #t lst))
 
-(define (or . lst)
+(def (or . lst)
     (fold || #f lst))
 
-(define (max first . rest)
-    (fold (lambda (old new)
+(def (max first . rest)
+    (fold (fn (old new)
         (if (> old new) old new)) first rest))
 
-(define (min first . rest)
-    (fold (lambda (old new)
+(def (min first . rest)
+    (fold (fn (old new)
         (if (< old new) old new)) first rest))
 
-(define (length lst)
-    (fold (lambda (x y) (+ x 1)) 0 lst))
+(def (length lst)
+    (fold (fn (x y) (+ x 1)) 0 lst))
 
-(define (reverse lst)
+(def (reverse lst)
     (fold (flip cons) '() lst))
 
-(define (map func lst)
-    (foldr (lambda (x y) (cons (func x) y)) '() lst))
+(def (map func lst)
+    (foldr (fn (x y) (cons (apply func x) y)) '() lst))
 
-(define (filter pred lst)
-    (foldr (lambda (x y)
+(def (filter pred lst)
+    (foldr (fn (x y)
         (if (pred x)
             (cons x y)
             y)) '() lst))
 
-(define (caar x)
+(def (caar x)
     (car (car x)))
 
-(define (cadr x)
+(def (cadr x)
     (car (cdr x)))
 
-(define (cdar x)
+(def (cdar x)
     (cdr (car x)))
 
-(define (cddr x)
+(def (cddr x)
     (cdr (cdr x)))
 
-(define (replicate n val)
+(def (replicate n val)
     (if (= n 0) '()
         (cons val (replicate (- n 1) val))))
 
-(define (make-vector n val)
+(def (make-vector n val)
     (apply vector (replicate n val)))
 
-(define (range a . b)
+(def (range a . b)
     (if (eq? b '())
         (range 0 a)
         (if (>= a b) '()
