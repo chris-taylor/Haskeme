@@ -54,7 +54,13 @@ eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badFo
 apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
 apply (PrimitiveFunc func) args = liftThrows $ func args
 apply (IOFunc func) args = func args
-apply (Func params varargs body closure) args = 
+apply (Func  params varargs body closure) args = applyFunc params varargs body closure args
+apply (Macro params varargs body closure) args = applyFunc params varargs body closure args
+apply (String str) args = applyString str args
+apply (Vector arr) args = applyVector arr args
+
+applyFunc :: [String] -> Maybe String -> [LispVal] -> Env -> [LispVal] -> IOThrowsError LispVal
+applyFunc params varargs body closure args = 
     if num params /= num args && varargs == Nothing
         then throwError $ NumArgs (num params) args
         else (liftIO $ bindVars closure $ zip params args) >>= bindVarArgs varargs >>= evalBody
@@ -66,19 +72,21 @@ apply (Func params varargs body closure) args =
             Just argName -> liftIO $ bindVars env [(argName, List $ remainingArgs)]
             Nothing -> return env
 
-apply (String str) [Number n] = let index = fromInteger n in
+applyString :: String -> [LispVal] -> IOThrowsError LispVal
+applyString str [Number n] = let index = fromInteger n in
     if index < length str
         then return $ Char $ str !! index
         else throwError $ OutOfRange index (0, length str - 1) (String str)
-apply (String str) [arg]      = throwError $ TypeMismatch "integer" arg
-apply (String str) args       = throwError $ NumArgs 1 args
+applyString str [arg]      = throwError $ TypeMismatch "integer" arg
+applyString str args       = throwError $ NumArgs 1 args
 
-apply (Vector arr) [Number n] = let index = fromInteger n in
+applyVector :: (Array Int LispVal) -> [LispVal] -> IOThrowsError LispVal
+applyVector arr [Number n] = let index = fromInteger n in
     if index < (snd $ bounds arr) + 1
         then return $ arr ! index
         else throwError $ OutOfRange index (bounds arr) (Vector arr)
-apply (Vector arr) [arg]      = throwError $ TypeMismatch "integer" arg
-apply (Vector arr) args       = throwError $ NumArgs 1 args
+applyVector arr [arg]      = throwError $ TypeMismatch "integer" arg
+applyVector arr args       = throwError $ NumArgs 1 args
 
 -- Helper functions
 
