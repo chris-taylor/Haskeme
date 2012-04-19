@@ -30,7 +30,7 @@ runRepl :: IO ()
 runRepl = do 
     evalEnv  <- primitiveBindings
     macroEnv <- nullEnv
-    untilM_ (== "quit") (readPrompt "haskeme> ") (evalExpandAndPrint (evalEnv, macroEnv))
+    untilM_ (== "quit") (readPrompt "haskeme> ") (expandEvalAndPrint (evalEnv, macroEnv))
 
 -- IO Functions
 
@@ -40,28 +40,16 @@ flushStr str = putStr str >> hFlush stdout
 readPrompt :: String -> IO String
 readPrompt prompt = flushStr prompt >> getLine
 
--- Eval
+-- Macro expansion and evaluation
 
-evalString :: Env -> String -> IO String
-evalString env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= eval env
-
-evalExpr :: (Env, Env) -> String -> IO String
-evalExpr (env, macroEnv) expr = runIOThrows $ liftM show $ macroExpand (env, macroEnv) expr >>= eval env
-
-evalExpandAndPrint :: (Env, Env) -> String -> IO ()
-evalExpandAndPrint envs expr = if null expr
+expandEvalAndPrint :: (Env, Env) -> String -> IO ()
+expandEvalAndPrint envs expr = if null expr
     then return ()
-    else evalExpr envs expr >>= putStrLn
+    else expandAndEval envs expr >>= putStrLn
 
-evalAndPrint :: Env -> String -> IO ()
-evalAndPrint env expr = if null expr
-    then return ()
-    else evalString env expr >>= putStrLn
-
--- Macros
-
-macroExpand :: (Env, Env) -> String -> IOThrowsError LispVal
-macroExpand (env, macroEnv) expr = (liftThrows $ readExpr expr) >>= evalMacro (env, macroEnv)
+expandAndEval :: (Env, Env) -> String -> IO String
+expandAndEval (env, macroEnv) expr = runIOThrows $ liftM show
+    $ (liftThrows $ readExpr expr) >>= evalMacro (env, macroEnv) >>= eval env
 
 -- Environments
 
