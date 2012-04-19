@@ -26,9 +26,9 @@ I've also borrowed some ideas from Arc and Q:
   - User defined functions, lambdas and lexical closures
   - Full suite of numeric functions (trigonometry, sqrt, exp/log etc)
   - Can call strings, vectors and hashes like functions:
-    - `(str n)` returns then `n`th character of a string
-    - `(vec n)` returns the element at the `n`th index of a vector
-    - `(hash k)` returns the value associated with key `k` of a hash
+    + `(str n)` returns then `n`th character of a string
+    + `(vec n)` returns the element at the `n`th index of a vector
+    + `(hash k)` returns the value associated with key `k` of a hash
 * I/O
   - Read from stdin or any file
   - Write to stdout or any file
