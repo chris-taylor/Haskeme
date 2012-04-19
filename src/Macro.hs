@@ -20,6 +20,7 @@ evalMacro (_ , e2) val@(List (Atom name : args)) = do
             macro <- liftIO $ readIORef macroRef
             applyMacro macro args)
           (lookup name env)
+evalMacro (_, _) val = return val
 
 applyMacro :: LispVal -> [LispVal] -> IOThrowsError LispVal
 applyMacro (Macro params varargs body closure) args = 
