@@ -15,29 +15,34 @@ I've also borrowed some ideas from Arc and Q:
   - Symbol, Pair, Char, String, Boolean
   - Numeric types (Integer, Rational, Float, Complex)
   - Vectors (mutable, constant access time lists)
+  - Hashes (mutable key-value stores)
   - Functions are first-class values
 * Control flow
-  - Conditionals (`if`, `cond`, `case`)
-  - Statement grouping with `begin`
+  - Conditionals (`if`, `case`)
+  - Statement grouping with `do`
   - Local bindings with `let` and `with`
-  - Top-level bindings with `define`
+  - Top-level bindings with `def`
 * Functions:
   - User defined functions, lambdas and lexical closures
   - Full suite of numeric functions (trigonometry, sqrt, exp/log etc)
-  - Can call strings and vectors like functions defined over the integers: `(obj n)` returns the element in the nth position of obj
+  - Can call strings, vectors and hashes like functions:
+    - `(str n)` returns then `n`th character of a string
+    - `(vec n)` returns the element at the `n`th index of a vector
+    - `(hash k)` returns the value associated with key `k` of a hash
 * I/O
   - Read from stdin or any file
   - Write to stdout or any file
   - Load libraries from a file
 * Basic macro system:
+  - Define macros with `macro` keyword
   - Whole language, including user defined functions, available at macro expansion time
 * Standard library
  
 ## Still to come
 
 * Data types
-  - Hash
-  - Stream
+  - Stream?
+* Operations on vectors and hashes
 * Error handling for numeric operations
 * Tail call optimization
 * Literal unary functions, e.g. with `[+ _ 1]` notation
