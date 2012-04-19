@@ -6,7 +6,7 @@ module LispVal (
     , ThrowsError
     , IOThrowsError
     , Env
-    , showVal, unwordsList, makeNormalFunc, makeVarArgs, makeNormalMacro, makeVarArgsMacro
+    , showVal, nil, unwordsList, makeNormalFunc, makeVarArgs, makeNormalMacro, makeVarArgsMacro
     ) where
 
 import IO
@@ -79,6 +79,9 @@ showFunc name args varargs =
         (case varargs of
             Nothing  -> ""
             Just arg -> " . " ++ arg) ++ ") ...)"
+
+nil :: LispVal
+nil = List []
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal

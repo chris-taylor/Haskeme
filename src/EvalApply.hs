@@ -24,8 +24,7 @@ eval env (List [Atom "quasiquote", val]) = evalQuasiquote 1 env val
 eval env (List [Atom "let", Atom var, form, expr]) = evalLet env var form expr
 eval env (List [Atom "with", List bindings, expr]) = evalWith env bindings expr
 eval env (List (Atom "do" : exprs)) = evalDo env exprs
-eval env (List [Atom "if", test, conseq, alt]) = evalIf env test conseq alt
-eval env (List (Atom "cond" : clauses)) = evalCond env clauses
+eval env (List (Atom "if" : exprs)) = evalIf env exprs
 eval env (List (Atom "case" : key : clauses)) = evalCase env key clauses
 eval env (List [Atom "set!", Atom var, form]) = eval env form >>= setVar env var
 eval env (List [Atom "set-car!", Atom var, form]) = eval env form >>= setCar env var
@@ -88,10 +87,7 @@ applyVector arr [Number n] = let index = fromInteger n in
 applyVector arr [arg]      = throwError $ TypeMismatch "integer" arg
 applyVector arr args       = throwError $ NumArgs 1 args
 
--- Helper functions
-
-nil :: LispVal
-nil = List []
+-- Evaluation of special forms
 
 evalLet :: Env -> String -> LispVal -> LispVal -> IOThrowsError LispVal
 evalLet env var form expr = do
@@ -111,23 +107,18 @@ evalDo env [] = throwError $ NumArgs 1 [List []]
 evalDo env [expr] = eval env expr
 evalDo env (expr : rest) = eval env expr >> evalDo env rest
 
-evalIf :: Env -> LispVal -> LispVal -> LispVal -> IOThrowsError LispVal
-evalIf env predicate conseq alt = do
-    result <- eval env predicate
-    case result of
-        Bool True  -> eval env conseq
-        Bool False -> eval env alt
-        notBool    -> throwError $ TypeMismatch "boolean" notBool
-
-evalCond :: Env -> [LispVal] -> IOThrowsError LispVal
-evalCond env [] = throwError $ NumArgs 1 [List []]
-evalCond env [List [Atom "else", expr]] = eval env expr
-evalCond env (List [predicate, expr] : rest) = do
-    result <- eval env predicate
-    case result of
-        Bool True  -> eval env expr
-        Bool False -> evalCond env rest
-        notBool    -> throwError $ TypeMismatch "boolean" notBool
+evalIf :: Env -> [LispVal] -> IOThrowsError LispVal
+evalIf env [test, conseq] = evalIf env [test, conseq, Bool False]
+evalIf env [test, conseq, alt] = do
+    result <- eval env test
+    if isFalse result
+        then eval env alt
+        else eval env conseq
+evalIf env (test : conseq : rest) = do
+    result <- eval env test
+    if isFalse result
+        then evalIf env rest
+        else eval env conseq
 
 evalCase :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalCase env key clauses = do
@@ -169,6 +160,19 @@ evalLoad env [arg] = do
         (String filename) -> load filename >>= liftM last . mapM (eval env)
         other             -> throwError $ TypeMismatch "string" other
 evalLoad env args = throwError $ NumArgs 1 args
+
+-- Helper functions
+
+isFalse :: LispVal -> Bool
+isFalse (Bool False) = True
+isFalse (Number 0)   = True
+isFalse (Ratio 0)    = True
+isFalse (Float 0)    = True
+isFalse (Complex 0)  = True
+isFalse (String "")  = True
+isFalse (List [])    = True
+isFalse (Vector arr) = length (elems arr) == 0
+isFalse _            = False
 
 load :: String -> IOThrowsError [LispVal]
 load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
