@@ -23,9 +23,9 @@ evalMacro :: (Env, Env) -> LispVal -> IOThrowsError LispVal
       return the form.
     - If the form is anything other than a list, then return it. -}
 evalMacro (env, macroEnv) (List (Atom "macro" : List (Atom var : params) : body)) = 
-    makeNormalFunc env params body >>= defineVar macroEnv var >> return (List [])
+    makeNormalMacro env params body >>= defineVar macroEnv var >> return (List [])
 evalMacro (env, macroEnv) (List (Atom "macro" : DottedList (Atom var : params) varargs : body)) =
-    makeVarArgs varargs env params body >>= defineVar macroEnv var >> return (List [])
+    makeVarArgsMacro varargs env params body >>= defineVar macroEnv var >> return (List [])
 evalMacro (_ , macroEnv) val@(List (Atom name : args)) = do
     env <- liftIO $ readIORef macroEnv
     maybe (return val)
