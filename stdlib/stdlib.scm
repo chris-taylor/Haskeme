@@ -2,7 +2,7 @@
     (if x #f #t))
 
 (def (null? obj)
-    (if (eqv? obj '()) #t #f))
+    (is obj '()))
 
 (def (list . objs)
     objs)
