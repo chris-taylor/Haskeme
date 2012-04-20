@@ -1,6 +1,7 @@
 module Variables where
 
 import Data.IORef
+import Data.Array
 import Control.Monad.Error
 
 import LispVal
@@ -36,7 +37,13 @@ setCar envRef var val = do
             case oldVal of
                 List (_ : cdr)          -> liftIO $ writeIORef varRef (List (val : cdr))
                 DottedList (_ : cdr) tl -> liftIO $ writeIORef varRef (DottedList (val : cdr) tl)
-                notPair -> throwError $ TypeMismatch "pair" notPair)
+                Vector arr              -> liftIO $ writeIORef varRef (Vector $ listArray bds (val : cdr)) where
+                  bds       = bounds arr
+                  (_ : cdr) = elems arr
+                String (_ : cdr) -> liftIO $ writeIORef varRef (case val of
+                  Char c -> String (c : cdr)
+                  _      -> List (val : map Char cdr))
+                other    -> throwError $ TypeMismatch "pair, vector" other)
           (lookup var env)
     return val
 
