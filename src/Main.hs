@@ -11,7 +11,6 @@ import Primitives
 import IOPrimitives
 import Variables
 import EvalApply
-import Macro
 
 -- Main
 
@@ -27,10 +26,7 @@ runOne args = do
         >>= hPutStrLn stderr
 
 runRepl :: IO ()
-runRepl = do 
-    evalEnv  <- primitiveBindings
-    macroEnv <- nullEnv
-    untilM_ (== "quit") (readPrompt "haskeme> ") (expandEvalAndPrint (evalEnv, macroEnv))
+runRepl = primitiveBindings >>= untilM_ (== "quit") (readPrompt "haskeme> ") . evalAndPrint
 
 -- IO Functions
 
@@ -42,14 +38,13 @@ readPrompt prompt = flushStr prompt >> getLine
 
 -- Macro expansion and evaluation
 
-expandEvalAndPrint :: (Env, Env) -> String -> IO ()
-expandEvalAndPrint envs expr = if null expr
+evalAndPrint :: Env -> String -> IO ()
+evalAndPrint env expr = if null expr
     then return ()
-    else expandAndEval envs expr >>= putStrLn
+    else evalExpr env expr >>= putStrLn
 
-expandAndEval :: (Env, Env) -> String -> IO String
-expandAndEval (env, macroEnv) expr = runIOThrows $ liftM show
-    $ (liftThrows $ readExpr expr) >>= evalMacro (env, macroEnv) >>= eval env
+evalExpr :: Env -> String -> IO String
+evalExpr env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= eval env
 
 -- Environments
 
