@@ -14,7 +14,7 @@
     (fn (x y) (func y x)))
 
 (def (curry func x)
-    (fn (y) (func (list x y))))
+    (fn (y) (apply func (list x y))))
 
 (def (compose f g)
     (fn (x) (f (g x))))
@@ -112,3 +112,6 @@
         (range 0 a)
         (if (>= a b) '()
             (cons a (range (+ 1 a) b)))))
+
+(macro (when test . body)
+    `(if ,test (do ,@body)))
