@@ -2,6 +2,8 @@
 
 module LispVal (
       LispVal (Atom,List,DottedList,Vector,Hash,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,IOFunc,Func,Macro,Port)
+    , VectorType
+    , HashType
     , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,OutOfRange,KeyNotFound,Default)
     , ThrowsError
     , IOThrowsError
@@ -21,11 +23,14 @@ import Text.ParserCombinators.Parsec (ParseError)
 
 type Env = IORef [(String, IORef LispVal)]
 
+type VectorType = Array Int LispVal
+type HashType = Map.Map LispVal LispVal
+
 data LispVal = Atom String
              | List [LispVal]
              | DottedList [LispVal] LispVal
-             | Vector (Array Int LispVal)
-             | Hash (Map.Map LispVal LispVal)
+             | Vector VectorType
+             | Hash HashType
              | Number Integer
              | Ratio Rational
              | Float Double
@@ -119,25 +124,11 @@ instance Show ([LispVal] -> ThrowsError LispVal) where
 
 instance Show ([LispVal] -> IOThrowsError LispVal) where
     show _ = "<ioPrimitive>"
+    
+-- Equivalance of LispVals (for use as keys in a hash)
 
 instance Eq LispVal where
     x == y = eqv x y
-
-instance Ord LispVal where
-    compare (Atom x)   (Atom y)   = compare x y
-    compare (String x) (String y) = compare x y
-    compare (Number x) (Number y) = compare x y
-    compare (Ratio x)  (Ratio y)  = compare x y
-    compare (Float x)  (Float y)  = compare x y
-    --compare (Number x) (Number y) = compare x y
-    --compare (Ratio x)  (Ratio y)  = compare x y
-    --compare (Float x)  (Float y)  = compare x y
-    --compare (Atom x)   (Atom y)  = compare x y
-    --compare (String x) (String y) = compare x y
-    --compare (Bool x)   (Bool y)   = compare x y
-    compare _          _          = EQ
-
--- Equivalance of LispVal
 
 eqv :: LispVal -> LispVal -> Bool
 eqv (Bool arg1) (Bool arg2) = arg1 == arg2
@@ -152,3 +143,28 @@ eqv (Vector xs) (Vector ys) = eqv (List $ elems xs) (List $ elems ys)
 eqv (DottedList xs x) (DottedList ys y) = eqv (List $ xs ++ [x]) (List $ ys ++ [y])
 eqv (List xs) (List ys) = length xs == length ys && and (map (uncurry eqv) $ zip xs ys)
 eqv _ _ = False
+
+-- Ordering of LispVals (for use as keys in a hash)
+
+data KeyType = AtomType | CharType | StringType | BoolType | NumberType
+             | RatioType | FloatType | NotKey deriving (Eq,Ord)
+
+keyType :: LispVal -> KeyType
+keyType (Atom _)   = AtomType
+keyType (Char _)   = CharType
+keyType (String _) = StringType
+keyType (Bool _)   = BoolType
+keyType (Number _) = NumberType
+keyType (Ratio _)  = RatioType
+keyType (Float _)  = FloatType
+keyType _          = NotKey
+
+instance Ord LispVal where
+    compare (Atom x)   (Atom y)   = compare x y
+    compare (Char x)   (Char y)   = compare x y
+    compare (String x) (String y) = compare x y
+    compare (Bool x)   (Bool y)   = compare x y
+    compare (Number x) (Number y) = compare x y
+    compare (Ratio x)  (Ratio y)  = compare x y
+    compare (Float x)  (Float y)  = compare x y
+    compare arg1       arg2       = compare (keyType arg1) (keyType arg2)
