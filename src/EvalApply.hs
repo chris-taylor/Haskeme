@@ -49,13 +49,6 @@ eval env (List (function : args)) = do
 eval env (List []) = return $ List []
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
-evalSet :: Env -> [LispVal] -> IOThrowsError LispVal
-evalSet env [Atom var, form] = eval env form >>= setVar env var
-evalSet env [List [Atom "car", Atom var], form] = eval env form >>= setCar env var
-evalSet env [List [Atom "cdr", Atom var], form] = eval env form >>= setCdr env var
-evalSet env [other, _] = throwError $ TypeMismatch "atom, list" other
-evalSet env badArgs = throwError $ NumArgs 2 badArgs
-
 -- Application
 
 apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
@@ -148,6 +141,17 @@ evalCase' env key (List [obj, expr] : rest) = do
     if eqv key result
         then eval env expr
         else evalCase' env key rest
+
+evalSet :: Env -> [LispVal] -> IOThrowsError LispVal
+evalSet env [Atom var, form] = eval env form >>= setVar env var
+evalSet env [List [Atom "car", Atom var], form] = eval env form >>= setCar env var
+evalSet env [List [Atom "cdr", Atom var], form] = eval env form >>= setCdr env var
+evalSet env [List [Atom var, form1], form2] = do
+    key <- eval env form1
+    val <- eval env form2
+    setIndex env var key val
+evalSet env [other, _] = throwError $ TypeMismatch "atom, list" other
+evalSet env badArgs = throwError $ NumArgs 2 badArgs
 
 evalQuasiquote :: Int -> Env -> LispVal -> IOThrowsError LispVal
 evalQuasiquote 0 env val = eval env val
