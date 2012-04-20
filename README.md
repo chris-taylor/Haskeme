@@ -18,11 +18,11 @@ I've also borrowed some ideas from Arc and Q:
   - Hashes (key-value stores)
   - Functions are first-class values
 * Control flow
-  - Smart `if` statement: `(if test1 conseq1 ... testn conseqn alternative)`
-  - Smart `case` statement: `(case x (val1 result1) ... (valn resultn))`
+  - `if` statement: `(if test1 conseq1 ... testn conseqn alternative)`
+  - `case` statement: `(case x (val1 result1) ... (valn resultn))`
   - Statement grouping with `do`
 * Scope
-  - Top-level definitions with `def` and `macro`
+  - Top-level definitions with `def`
   - Local bindings with `let` and `with`
 * Assignment
   - Assignment using `=` operator
@@ -30,25 +30,23 @@ I've also borrowed some ideas from Arc and Q:
   - Set elements of strings, vectors and hashes too: `(= (vec 0) 1)`
 * Functions:
   - User defined functions, lambdas (with `fn` keyword) and lexical closures
-  - Notation for unary functions: `[+ x 1]` for `(fn (x) (+ x 1))`
+  - Notation for unary functions: `[+ _ 1]` for `(fn (x) (+ x 1))`
   - Full suite of numeric functions (trigonometry, sqrt, exp/log etc)
-  - Can call strings, vectors and hashes like functions:
-    + `(str n)` returns then `n`th character of a string
-    + `(vec n)` returns the element at the `n`th index of a vector
-    + `(hash k)` returns the value associated with key `k` of a hash
+  - Can call strings, vectors and hashes as if they were functions: `(vec 0)` etc.
 * I/O
   - Read from stdin or any file
   - Write to stdout or any file
   - Load libraries from a file
 * Basic macro system:
   - Whole language, including user defined functions, available at macro expansion time
+  - Macros are first-class values (yeah, let's see how that works out...)
 * Standard library
  
 ## Still to come
 
-* Data types
-  - Stream?
-* Error handling for numeric operations
 * Tail call optimization
+* Continuations
 * Comments
+* Error handling for numeric operations
+* Stream data type
 * R5RS compliance
