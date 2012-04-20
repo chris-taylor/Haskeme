@@ -76,7 +76,7 @@ showVal (Bool False) = "#f"
 showVal (List contents) = "(" ++ unwordsList contents ++ ")"
 showVal (DottedList hd tl) = "(" ++ unwordsList hd ++ " . " ++ showVal tl ++ ")"
 showVal (Vector arr) = "$(" ++ unwordsList (elems arr) ++ ")"
-showVal (Hash hash) = "<hash: " ++ show hash ++ ">"
+showVal (Hash hash) = "#(" ++ unwordsList (unpairs $ zip (Map.keys hash) (Map.elems hash)) ++ ")"
 showVal (PrimitiveFunc _) = "<primitive>"
 showVal (IOFunc _) = "<IO primitive>"
 showVal (Func { params = args, vararg = varargs }) = showFunc "fn" args varargs
@@ -95,6 +95,10 @@ nil = List []
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
+
+unpairs :: [(a,a)] -> [a]
+unpairs [] = []
+unpairs ((x,y) : rest) = x : y : unpairs rest
 
 makeFunc :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
 makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
