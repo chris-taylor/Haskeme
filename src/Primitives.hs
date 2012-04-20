@@ -8,7 +8,7 @@ import qualified Data.Map as Map
 import Ratio
 import Complex
 
-import LispVal hiding (eqv)
+import LispVal
 import LispError
 import LispNum
 
@@ -19,13 +19,16 @@ primitives = numericPrimitives ++
              , ("pair?", unaryBoolOp isPair)
              , ("boolean?", unaryBoolOp isBool)
              , ("char?", unaryBoolOp isChar)
+             , ("string?", unaryBoolOp isString)
              , ("number?", unaryBoolOp isNumber)
              , ("integer?", unaryBoolOp isInteger)
-             , ("ratio?", unaryBoolOp isRatio)
-             , ("float?", unaryBoolOp isFloat)
+             , ("rational?", unaryBoolOp isRatio)
+             , ("real?", unaryBoolOp isFloat)
              , ("complex?", unaryBoolOp isComplex)
-             , ("string?", unaryBoolOp isString)
+             , ("vector?", unaryBoolOp isVector)
+             , ("hash?", unaryBoolOp isHash)
              , ("procedure?", unaryBoolOp isProcedure)
+             , ("macro?", unaryBoolOp isMacro)
              , ("port?", unaryBoolOp isPort)
              , ("==", numBoolBinop (==))
              , ("<", numBoolBinop (<))
@@ -47,8 +50,7 @@ primitives = numericPrimitives ++
              , ("car", car)
              , ("cdr", cdr)
              , ("cons", cons)
-             , ("eqv?", eqv)
-             , ("eq?", eqv)
+             , ("is", is)
              , ("equal?", equal) ]
 
 boolBinop :: (LispVal -> ThrowsError a) -> (a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
@@ -134,6 +136,11 @@ isSymbol :: LispVal -> Bool
 isSymbol (Atom _) = True
 isSymbol _        = False
 
+isPair :: LispVal -> Bool
+isPair (List (x:_))          = True
+isPair (DottedList (x:_) tl) = True
+isPair _                     = False
+
 isBool :: LispVal -> Bool
 isBool (Bool _) = True
 isBool _        = False
@@ -141,6 +148,10 @@ isBool _        = False
 isChar :: LispVal -> Bool
 isChar (Char _) = True
 isChar _        = False
+
+isString :: LispVal -> Bool
+isString (String _) = True
+isString _          = False
 
 isNumber :: LispVal -> Bool
 isNumber (Number _)  = True
@@ -165,20 +176,23 @@ isComplex :: LispVal -> Bool
 isComplex (Complex _) = True
 isComplex _           = False
 
-isString :: LispVal -> Bool
-isString (String _) = True
-isString _          = False
+isVector :: LispVal -> Bool
+isVector (Vector _) = True
+isVector _          = False
 
-isPair :: LispVal -> Bool
-isPair (List (x:_))          = True
-isPair (DottedList (x:_) tl) = True
-isPair _                     = False
+isHash :: LispVal -> Bool
+isHash (Hash _) = True
+isHash _        = False
 
 isProcedure :: LispVal -> Bool
 isProcedure (PrimitiveFunc _) = True
 isProcedure (IOFunc _)        = True
 isProcedure (Func _ _ _ _)    = True
 isProcedure _                 = False
+
+isMacro :: LispVal -> Bool
+isMacro (Macro _ _ _ _) = True
+isMacro _               = False
 
 isPort :: LispVal -> Bool
 isPort (Port _) = True
@@ -227,6 +241,7 @@ cons :: [LispVal] -> ThrowsError LispVal
 cons [x, List xs]          = return $ List (x:xs)
 cons [x, DottedList xs tl] = return $ DottedList (x:xs) tl
 cons [Char c, String s]    = return $ String (c:s)
+cons [x, String s]         = return $ List (x : map Char s)
 cons [x, Vector arr]       = return $ Vector $ listArray (0, n+1) (x:els) where
                                 (_, n) = bounds arr
                                 els    = elems arr
@@ -243,20 +258,20 @@ listEquals eq arg1 arg2 = return $ Bool $ (length arg1 == length arg2) &&
             Left err -> False
             Right (Bool val) -> val
 
-eqv :: [LispVal] -> ThrowsError LispVal
-eqv [Bool arg1, Bool arg2] = return $ Bool $ arg1 == arg2
-eqv [Atom arg1, Atom arg2] = return $ Bool $ arg1 == arg2
-eqv [Char arg1, Char arg2] = return $ Bool $ arg1 == arg2
-eqv [String arg1, String arg2]   = return $ Bool $ arg1 == arg2
-eqv [Number arg1, Number arg2]   = return $ Bool $ arg1 == arg2
-eqv [Ratio arg1, Ratio arg2]     = return $ Bool $ arg1 == arg2
-eqv [Float arg1, Float arg2]     = return $ Bool $ arg1 == arg2
-eqv [Complex arg1, Complex arg2] = return $ Bool $ arg1 == arg2
-eqv [DottedList xs x, DottedList ys y] = listEquals eqv (xs++[x]) (ys++[y])
-eqv [Vector xs, Vector ys]             = listEquals eqv (elems xs) (elems ys)
-eqv [List xs, List ys]                 = listEquals eqv xs ys
-eqv [_ , _] = return $ Bool False
-eqv badArgs = throwError $ NumArgs 2 badArgs
+is :: [LispVal] -> ThrowsError LispVal
+is [Bool arg1, Bool arg2] = return $ Bool $ arg1 == arg2
+is [Atom arg1, Atom arg2] = return $ Bool $ arg1 == arg2
+is [Char arg1, Char arg2] = return $ Bool $ arg1 == arg2
+is [String arg1, String arg2]   = return $ Bool $ arg1 == arg2
+is [Number arg1, Number arg2]   = return $ Bool $ arg1 == arg2
+is [Ratio arg1, Ratio arg2]     = return $ Bool $ arg1 == arg2
+is [Float arg1, Float arg2]     = return $ Bool $ arg1 == arg2
+is [Complex arg1, Complex arg2] = return $ Bool $ arg1 == arg2
+is [DottedList xs x, DottedList ys y] = listEquals is (xs++[x]) (ys++[y])
+is [Vector xs, Vector ys]             = listEquals is (elems xs) (elems ys)
+is [List xs, List ys]                 = listEquals is xs ys
+is [_ , _] = return $ Bool False
+is badArgs = throwError $ NumArgs 2 badArgs
 
 data Unpacker = forall a. Eq a => AnyUnpacker (LispVal -> ThrowsError a)
 
@@ -276,6 +291,6 @@ equal [arg1, arg2] = do
                        [AnyUnpacker unpackNum, AnyUnpacker unpackRat,
                         AnyUnpacker unpackFloat, AnyUnpacker unpackCplx,
                         AnyUnpacker unpackStr, AnyUnpacker unpackBool]
-    eqvEquals <- eqv [arg1, arg2]
+    eqvEquals <- is [arg1, arg2]
     return $ Bool $ (primitiveEquals || let (Bool x) = eqvEquals in x)
 equal badArgs = throwError $ NumArgs 2 badArgs
