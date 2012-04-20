@@ -176,10 +176,12 @@ pairs [ ]            = []
 pairs [_]            = []
 pairs (x : y : rest) = (x, y) : pairs rest
 
-unpairs :: [(a,a)] -> [a]
-unpairs [ ] = []
-unpairs [_] = []
-unpairs ((x,y) : rest) = x : y : unpairs rest
+parseFunction :: Parser LispVal
+parseFunction = do
+    char '[' >> spaces
+    body <- sepEndBy parseExpr spaces1
+    spaces >> char ']'
+    return $ List [Atom "fn", List [Atom "_"], List body]
 
 -- Parsing helper functions
 
