@@ -108,7 +108,7 @@
     (apply vector (replicate n val)))
 
 (def (range a . b)
-    (if (eq? b '())
+    (if (null? b)
         (range 0 a)
         (if (>= a b) '()
             (cons a (range (+ 1 a) b)))))
