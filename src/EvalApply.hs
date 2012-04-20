@@ -29,9 +29,7 @@ eval env (List [Atom "with", List bindings, expr]) = evalWith env bindings expr
 eval env (List (Atom "do" : exprs)) = evalDo env exprs
 eval env (List (Atom "if" : exprs)) = evalIf env exprs
 eval env (List (Atom "case" : key : clauses)) = evalCase env key clauses
-eval env (List [Atom "set!", Atom var, form]) = eval env form >>= setVar env var
-eval env (List [Atom "set-car!", Atom var, form]) = eval env form >>= setCar env var
-eval env (List [Atom "set-cdr!", Atom var, form]) = eval env form >>= setCdr env var
+eval env (List (Atom "=" : args)) = evalSet env args
 eval env (List (Atom "load" : params)) = evalLoad env params
 eval env (List [Atom "def", Atom var, form]) = eval env form >>= defineVar env var
 eval env (List (Atom "def" : List (Atom var : params) : body)) = 
@@ -50,6 +48,13 @@ eval env (List (function : args)) = do
     apply func argVals
 eval env (List []) = return $ List []
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
+
+evalSet :: Env -> [LispVal] -> IOThrowsError LispVal
+evalSet env [Atom var, form] = eval env form >>= setVar env var
+evalSet env [List [Atom "car", Atom var], form] = eval env form >>= setCar env var
+evalSet env [List [Atom "cdr", Atom var], form] = eval env form >>= setCdr env var
+evalSet env [other, _] = throwError $ TypeMismatch "atom, list" other
+evalSet env badArgs = throwError $ NumArgs 2 badArgs
 
 -- Application
 

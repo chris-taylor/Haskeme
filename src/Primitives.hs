@@ -27,7 +27,7 @@ primitives = numericPrimitives ++
              , ("string?", unaryBoolOp isString)
              , ("procedure?", unaryBoolOp isProcedure)
              , ("port?", unaryBoolOp isPort)
-             , ("=", numBoolBinop (==))
+             , ("==", numBoolBinop (==))
              , ("<", numBoolBinop (<))
              , (">", numBoolBinop (>))
              , ("<=", numBoolBinop (<=))
