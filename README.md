@@ -14,16 +14,23 @@ I've also borrowed some ideas from Arc and Q:
 * Data types
   - Symbol, Pair, Char, String, Boolean
   - Numeric types (Integer, Rational, Float, Complex)
-  - Vectors (mutable, constant access time lists)
-  - Hashes (mutable key-value stores)
+  - Vectors (constant access time lists)
+  - Hashes (key-value stores)
   - Functions are first-class values
 * Control flow
-  - Conditionals (`if`, `case`)
+  - Smart `if` statement: `(if test1 conseq1 ... testn conseqn alternative)`
+  - Smart `case` statement: `(case x (val1 result1) ... (valn resultn))`
   - Statement grouping with `do`
+* Scope
+  - Top-level definitions with `def` and `macro`
   - Local bindings with `let` and `with`
-  - Top-level bindings with `def`
+* Assignment
+  - Assignment using `=` operator
+  - Assignment reaches inside structures: `(= (car x) 1)`
+  - Set elements of strings, vectors and hashes too: `(= (vec 0) 1)`
 * Functions:
-  - User defined functions, lambdas and lexical closures
+  - User defined functions, lambdas (with `fn` keyword) and lexical closures
+  - Notation for unary functions: `[+ x 1]` for `(fn (x) (+ x 1))`
   - Full suite of numeric functions (trigonometry, sqrt, exp/log etc)
   - Can call strings, vectors and hashes like functions:
     + `(str n)` returns then `n`th character of a string
@@ -34,7 +41,6 @@ I've also borrowed some ideas from Arc and Q:
   - Write to stdout or any file
   - Load libraries from a file
 * Basic macro system:
-  - Define macros with `macro` keyword
   - Whole language, including user defined functions, available at macro expansion time
 * Standard library
  
@@ -42,9 +48,7 @@ I've also borrowed some ideas from Arc and Q:
 
 * Data types
   - Stream?
-* Operations on vectors and hashes
 * Error handling for numeric operations
 * Tail call optimization
-* Literal unary functions, e.g. with `[+ _ 1]` notation
 * Comments
 * R5RS compliance
