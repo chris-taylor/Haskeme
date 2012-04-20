@@ -20,7 +20,7 @@
     (fn (x) (f (g x))))
 
 (def zero?
-    (curry = 0))
+    (curry == 0))
 
 (def positive?
     (curry < 0))
@@ -29,10 +29,10 @@
     (curry > 0))
 
 (def (odd? num)
-    (= (mod num 2) 1))
+    (== (mod num 2) 1))
 
 (def (even? num)
-    (= (mod num 2) 0))
+    (== (mod num 2) 0))
 
 (def (foldr func end lst)
     (if (null? lst)
