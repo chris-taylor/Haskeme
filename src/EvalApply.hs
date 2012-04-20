@@ -36,6 +36,10 @@ eval env (List (Atom "def" : List (Atom var : params) : body)) =
     makeNormalFunc env params body >>= defineVar env var
 eval env (List (Atom "def" : DottedList (Atom var : params) varargs : body)) =
     makeVarArgs varargs env params body >>= defineVar env var
+eval env (List (Atom "macro" : List (Atom var : params) : body)) = 
+    makeNormalMacro env params body >>= defineVar env var
+eval env (List (Atom "macro" : DottedList (Atom var : params) varargs : body)) =
+    makeVarArgsMacro varargs env params body >>= defineVar env var
 eval env (List (Atom "fn" : List params : body)) = 
     makeNormalFunc env params body
 eval env (List (Atom "fn" : DottedList params varargs : body)) = 
@@ -44,8 +48,9 @@ eval env (List (Atom "fn" : varargs@(Atom _) : body)) =
     makeVarArgs varargs env [] body
 eval env (List (function : args)) = do
     func <- eval env function
-    argVals <- mapM (eval env) args
-    apply func argVals
+    case func of 
+        (Macro {}) -> apply func args >>= eval env
+        _          -> mapM (eval env) args >>= apply func
 eval env (List []) = return $ List []
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
