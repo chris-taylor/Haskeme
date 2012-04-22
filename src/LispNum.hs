@@ -49,6 +49,7 @@ numericPrimitives =
     , ("-", numericBinOp (-))
     , ("*", numericBinOp (*))
     , ("/", fractionalBinOp (/))
+    , ("abs", numericUnOp abs)
     , ("sin", floatingUnOp sin)
     , ("cos", floatingUnOp cos)
     , ("tan", floatingUnOp tan)
@@ -83,6 +84,10 @@ foldLeft1Error op xs = if length xs == 0
 numericBinOp :: (forall a. Num a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
 numericBinOp op params = foldLeft1Error (promoteNumericBinaryOp op) params
 
+numericUnOp :: (forall a. Num a => a -> a) -> [LispVal] -> ThrowsError LispVal
+numericUnOp op [arg] = promoteNumericUnaryOp op arg
+numericUnOp op args  = throwError $ NumArgs 1 args
+
 numericOrdOp :: (forall a. (Ord a, Num a) => a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
 numericOrdOp op params = case params of
     [x]            -> throwError $ NumArgs 2 [x]
@@ -114,12 +119,20 @@ promoteNumericBinaryOp op x y = case typeOf x `max` typeOf y of
     IntType     -> return $ Number (asNumber x `op` asNumber y)
     _           -> throwError $ TypeMismatch "number" y
 
+promoteNumericUnaryOp :: (forall a. Num a => a -> a) -> LispVal -> ThrowsError LispVal
+promoteNumericUnaryOp op x = case typeOf x of
+    IntType     -> return $ Number (op $ asNumber x)
+    RatioType   -> return $ Ratio (op $ asRatio x)
+    FloatType   -> return $ Float (op $ asFloat x)
+    ComplexType -> return $ Complex (op $ asComplex x)
+    NotANumber  -> throwError $ TypeMismatch "number" x
+
 promoteNumericOrdOp :: (forall a. (Num a, Ord a) => a -> a -> Bool) -> LispVal -> LispVal -> ThrowsError LispVal
 promoteNumericOrdOp op x y = case typeOf x `max` typeOf y of
     FloatType -> return $ Bool (asFloat x `op` asFloat y)
     RatioType -> return $ Bool (asRatio x `op` asRatio y)
     IntType   -> return $ Bool (asNumber x `op` asNumber y)
-    _         -> throwError $ TypeMismatch "int, rational, float" y
+    _         -> throwError $ TypeMismatch "int, rational or float" y
 
 promoteIntegralBinaryOp :: (forall a. Integral a => a -> a -> a) -> LispVal -> LispVal -> ThrowsError LispVal
 promoteIntegralBinaryOp op x y = case (typeOf x, typeOf y) of

@@ -14,7 +14,7 @@ import LispNum
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = numericPrimitives ++ 
-             [ ("stdlib", const $ return (String "../stdlib/stdlib.scm"))
+             [ ("stdlib", const $ return (String "/Users/crntaylor/Dev/haskell/haskeme/lib/stdlib.scm"))
              , ("symbol?", unaryBoolOp isSymbol)
              , ("pair?", unaryBoolOp isPair)
              , ("boolean?", unaryBoolOp isBool)
