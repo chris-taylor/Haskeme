@@ -59,30 +59,35 @@ setCdr envRef var val = do
           (\varRef -> do
             oldVal <- liftIO $ readIORef varRef
             case oldVal of
-                List (car : _)          -> liftIO $ writeIORef varRef (case val of
-                    List xs          -> List (car : xs)
-                    DottedList xs tl -> DottedList (car : xs) tl
-                    _                -> DottedList [car] val)
-                DottedList (car : _) _  -> liftIO $ writeIORef varRef (case val of
-                    List xs          -> List (car : xs)
-                    DottedList xs tl -> DottedList (car : xs) tl
-                    _                -> DottedList [car] val)
-                Vector arr              -> liftIO $ writeIORef varRef (case val of
-                    Vector arr'      -> Vector $ listArray (0,n+1) (car : cdr) where
-                        (_, n) = bounds arr'
-                        cdr    = elems arr'
-                    List xs          -> List (car : xs)
-                    DottedList xs tl -> DottedList (car : xs) tl
-                    _                -> DottedList [car] val)
-                    where car = arr ! 0
-                String (car : _)        -> liftIO $ writeIORef varRef (case val of
-                    String xs        -> String (car : xs)
-                    List xs          -> List (Char car : xs)
-                    DottedList xs tl -> DottedList (Char car : xs) tl
-                    _                -> DottedList [Char car] val)
-                notPair -> throwError $ TypeMismatch "pair" notPair)
+                List (car : _)          -> setListCdr varRef car val
+                DottedList (car : _) _  -> setListCdr varRef car val
+                Vector arr              -> setVectorCdr varRef car val where car = arr ! 0
+                String (car : _)        -> setStringCdr varRef car val
+                notPair -> throwError $ TypeMismatch "pair, vector, string" notPair)
           (lookup var env)
     return val
+
+setListCdr :: IORef LispVal -> LispVal -> LispVal -> IOThrowsError ()
+setListCdr varRef car val = liftIO $ writeIORef varRef (case val of
+    List xs          -> List (car : xs)
+    DottedList xs tl -> DottedList (car : xs) tl
+    _                -> DottedList [car] val)
+
+setVectorCdr :: IORef LispVal -> LispVal -> LispVal -> IOThrowsError ()
+setVectorCdr varRef car val = liftIO $ writeIORef varRef (case val of
+    Vector arr'      -> Vector $ listArray (0,n+1) (car : cdr) where
+        (_, n) = bounds arr'
+        cdr    = elems arr'
+    List xs          -> List (car : xs)
+    DottedList xs tl -> DottedList (car : xs) tl
+    _                -> DottedList [car] val)
+
+setStringCdr :: IORef LispVal -> Char -> LispVal -> IOThrowsError ()
+setStringCdr varRef car val = liftIO $ writeIORef varRef (case val of
+    String xs        -> String (car : xs)
+    List xs          -> List (Char car : xs)
+    DottedList xs tl -> DottedList (Char car : xs) tl
+    _                -> DottedList [Char car] val)
 
 setIndex :: Env -> String -> LispVal -> LispVal -> IOThrowsError LispVal
 setIndex envRef var index val = do
@@ -94,7 +99,7 @@ setIndex envRef var index val = do
                 String str -> setStringIndex varRef str index val
                 Vector arr -> setVectorIndex varRef arr index val
                 Hash hash  -> setHashKey varRef hash index val
-                other -> throwError $ TypeMismatch "string" other)
+                other -> throwError $ TypeMismatch "string, vector, hash" other)
           (lookup var env)
     return val
 
