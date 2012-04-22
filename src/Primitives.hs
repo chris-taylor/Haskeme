@@ -44,6 +44,7 @@ primitives = numericPrimitives ++
              , ("string>=?", strBoolBinop (>=))
              , ("vector", vector)
              , ("hash", hash)
+             , ("len", len)
              , ("symbol->string", typeTrans symbolToString)
              , ("string->symbol", typeTrans stringToSymbol)
              , ("vector->list", typeTrans vectorToList)
@@ -52,7 +53,7 @@ primitives = numericPrimitives ++
              , ("cdr", cdr)
              , ("cons", cons)
              , ("is", is)
-             , ("equal?", equal) ]
+             , ("iso", equal) ]
 
 boolBinop :: (LispVal -> ThrowsError a) -> (a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
 boolBinop unpacker op args = if length args /= 2
@@ -254,6 +255,18 @@ vector xs = return $ Vector $ listArray (0, length xs - 1) xs
 
 hash :: [LispVal] -> ThrowsError LispVal
 hash xs = return $ Hash $ Map.fromList $ pairs xs
+
+len :: [LispVal] -> ThrowsError LispVal
+len [arg]   = len' arg >>= return . Number . fromIntegral
+len badArgs = throwError $ NumArgs 1 badArgs
+
+len' :: LispVal -> ThrowsError Int
+len' (List xs)          = return $ length xs
+len' (DottedList xs tl) = return $ 1 + length xs
+len' (Vector arr)       = let (_, n) = bounds arr in return (n + 1)
+len' (Hash hash)        = return $ length $ Map.keys hash
+len' (String str)       = return $ length str
+len' other = throwError $ TypeMismatch "pair, vector, hash, string" other
 
 listEquals :: ([LispVal] -> ThrowsError LispVal) -> [LispVal] -> [LispVal] -> ThrowsError LispVal
 listEquals eq arg1 arg2 = return $ Bool $ (length arg1 == length arg2) &&

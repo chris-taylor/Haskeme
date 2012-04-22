@@ -135,17 +135,15 @@ evalDo env [expr] = eval env expr
 evalDo env (expr : rest) = eval env expr >> evalDo env rest
 
 evalIf :: Env -> [LispVal] -> IOThrowsError LispVal
-evalIf env [test, conseq] = evalIf env [test, conseq, Bool False]
-evalIf env [test, conseq, alt] = do
-    result <- eval env test
-    if isFalse result
-        then eval env alt
-        else eval env conseq
-evalIf env (test : conseq : rest) = do
-    result <- eval env test
-    if isFalse result
-        then evalIf env rest
-        else eval env conseq
+evalIf env args@(test : rest) = do
+    it <- eval env test
+    newEnv <- bindLocals env ("it", it)
+    evalIf' newEnv (truthVal it) rest
+
+evalIf' :: Env -> Bool -> [LispVal] -> IOThrowsError LispVal
+evalIf' env truth [conseq]        = evalIf' env truth [conseq, Bool False]
+evalIf' env truth [conseq, alt]   = if truth then eval env conseq else eval env alt
+evalIf' env truth (conseq : rest) = if truth then eval env conseq else evalIf env rest
 
 evalCase :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalCase env key clauses = do
@@ -201,16 +199,16 @@ evalLoad env args = throwError $ NumArgs 1 args
 
 -- Helper functions
 
-isFalse :: LispVal -> Bool
-isFalse (Bool False) = True
-isFalse (Number 0)   = True
-isFalse (Ratio 0)    = True
-isFalse (Float 0)    = True
-isFalse (Complex 0)  = True
-isFalse (String "")  = True
-isFalse (List [])    = True
-isFalse (Vector arr) = length (elems arr) == 0
-isFalse _            = False
+truthVal :: LispVal -> Bool
+truthVal (Bool False) = False
+truthVal (Number 0)   = False
+truthVal (Ratio 0)    = False
+truthVal (Float 0)    = False
+truthVal (Complex 0)  = False
+truthVal (String "")  = False
+truthVal (List [])    = False
+truthVal (Vector arr) = let (_, n) = bounds arr in n > 0
+truthVal _            = True
 
 load :: String -> IOThrowsError [LispVal]
 load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
