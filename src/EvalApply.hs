@@ -24,7 +24,7 @@ eval env val@(Hash _)    = return val
 eval env (Atom name)     = getVar env name
 eval env (List [Atom "quote", val]) = return val
 eval env (List [Atom "quasiquote", val]) = evalQuasiquote 1 env val
-eval env (List [Atom "let", Atom var, form, expr]) = evalLet env var form expr
+eval env (List [Atom "let", name, form, expr]) = evalLet env name form expr
 eval env (List [Atom "with", List bindings, expr]) = evalWith env bindings expr
 eval env (List (Atom "do" : exprs)) = evalDo env exprs
 eval env (List (Atom "if" : exprs)) = evalIf env exprs
@@ -102,10 +102,18 @@ applyHash hash args  = throwError $ NumArgs 1 args
 
 -- Evaluation of special forms
 
-evalLet :: Env -> String -> LispVal -> LispVal -> IOThrowsError LispVal
-evalLet env var form expr = do
+evalLet :: Env -> LispVal -> LispVal -> LispVal -> IOThrowsError LispVal
+evalLet env (Atom var) form expr = do
     val <- eval env form
     newEnv <- liftIO $ bindVars env [(var,val)]
+    eval newEnv expr
+evalLet env (List (Atom var : params)) body expr = do
+    fun <- makeNormalFunc env params [body]
+    newEnv <- liftIO $ bindVars env [(var,fun)]
+    eval newEnv expr
+evalLet env (DottedList (Atom var : params) varargs) body expr = do
+    fun <- makeVarArgs varargs env params [body]
+    newEnv <- liftIO $ bindVars env [(var,fun)]
     eval newEnv expr
 
 evalWith :: Env -> [LispVal] -> LispVal -> IOThrowsError LispVal
