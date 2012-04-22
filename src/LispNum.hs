@@ -70,61 +70,80 @@ numericPrimitives =
     , ("quotient", integralBinOp quot)
     , ("remainder", integralBinOp rem) ]
 
+foldLeftError :: (b -> a -> ThrowsError b) -> b -> [a] -> ThrowsError b
+foldLeftError op accum xs = if length xs == 0
+    then return accum
+    else do
+        accumulate <- accum `op` head xs
+        foldLeftError op accumulate (tail xs)
+
+foldLeft1Error :: (LispVal -> LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
+foldLeft1Error op xs = if length xs == 0
+    then throwError $ NumArgs 1 xs
+    else foldLeftError op (head xs) (tail xs)
+
 numericBinOp :: (forall a. Num a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
-numericBinOp op params = return $ foldl1 (promoteNumericBinaryOp op) params
+numericBinOp op params = foldLeft1Error (promoteNumericBinaryOp op) params
 
 numericOrdOp :: (forall a. (Ord a, Num a) => a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
 numericOrdOp op params = case params of
     [x]            -> throwError $ NumArgs 2 [x]
-    [x, y]         -> return $ x `o` y
-    (x : y : rest) -> let res@(Bool result) = x `o` y in
-                        if result
+    [x, y]         -> x `newOp` y
+    (x : y : rest) -> do res@(Bool result) <- x `newOp` y
+                         if result
                             then numericOrdOp op (y : rest)
                             else return res
-    where o = promoteNumericOrdOp op
+    where newOp = promoteNumericOrdOp op
 
 integralBinOp :: (forall a. Integral a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
-integralBinOp op params = return $ foldl1 (promoteIntegralBinaryOp op) params
+integralBinOp op params = foldLeft1Error (promoteIntegralBinaryOp op) params
 
 fractionalBinOp :: (forall a. Fractional a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
-fractionalBinOp op params = return $ foldl1 (promoteFractionalBinaryOp op) params
-
-floatingUnOp :: (forall a. Floating a => a -> a) -> [LispVal] -> ThrowsError LispVal
-floatingUnOp op [arg] = return $ (promoteFloatingUnaryOp op) arg
-floatingUnOp _  args  = throwError $ NumArgs 1 args
+fractionalBinOp op params = foldLeft1Error (promoteFractionalBinaryOp op) params
 
 floatingBinOp :: (forall a. Floating a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
-floatingBinOp op args = return $ foldl1 (promoteFloatingBinaryOp op) args
+floatingBinOp op args = foldLeft1Error (promoteFloatingBinaryOp op) args
 
-promoteNumericBinaryOp :: (forall a. Num a => a -> a -> a) -> LispVal -> LispVal -> LispVal
+floatingUnOp :: (forall a. Floating a => a -> a) -> [LispVal] -> ThrowsError LispVal
+floatingUnOp op [arg] = promoteFloatingUnaryOp op arg
+floatingUnOp _  args  = throwError $ NumArgs 1 args
+
+promoteNumericBinaryOp :: (forall a. Num a => a -> a -> a) -> LispVal -> LispVal -> ThrowsError LispVal
 promoteNumericBinaryOp op x y = case typeOf x `max` typeOf y of
-    ComplexType -> Complex (asComplex x `op` asComplex y)
-    FloatType   -> Float (asFloat x `op` asFloat y)
-    RatioType   -> Ratio (asRatio x `op` asRatio y)
-    IntType     -> Number (asNumber x `op` asNumber y)
+    ComplexType -> return $ Complex (asComplex x `op` asComplex y)
+    FloatType   -> return $ Float (asFloat x `op` asFloat y)
+    RatioType   -> return $ Ratio (asRatio x `op` asRatio y)
+    IntType     -> return $ Number (asNumber x `op` asNumber y)
+    _           -> throwError $ TypeMismatch "number" x
 
-promoteNumericOrdOp :: (forall a. (Num a, Ord a) => a -> a -> Bool) -> LispVal -> LispVal -> LispVal
+promoteNumericOrdOp :: (forall a. (Num a, Ord a) => a -> a -> Bool) -> LispVal -> LispVal -> ThrowsError LispVal
 promoteNumericOrdOp op x y = case typeOf x `max` typeOf y of
-    FloatType -> Bool (asFloat x `op` asFloat y)
-    RatioType -> Bool (asRatio x `op` asRatio y)
-    IntType   -> Bool (asNumber x `op` asNumber y)
+    FloatType -> return $ Bool (asFloat x `op` asFloat y)
+    RatioType -> return $ Bool (asRatio x `op` asRatio y)
+    IntType   -> return $ Bool (asNumber x `op` asNumber y)
+    _         -> throwError $ TypeMismatch "int, rational, float" x
 
-promoteIntegralBinaryOp :: (forall a. Integral a => a -> a -> a) -> LispVal -> LispVal -> LispVal
-promoteIntegralBinaryOp op x y = case typeOf x `max` typeOf y of
-    IntType     -> Number (asNumber x `op` asNumber y)
+promoteIntegralBinaryOp :: (forall a. Integral a => a -> a -> a) -> LispVal -> LispVal -> ThrowsError LispVal
+promoteIntegralBinaryOp op x y = case (typeOf x, typeOf y) of
+    (IntType, IntType) -> return $ Number (asNumber x `op` asNumber y)
+    (IntType, _)       -> throwError $ TypeMismatch "integer" x
+    (_, _)             -> throwError $ TypeMismatch "integer" y
 
-promoteFractionalBinaryOp :: (forall a. Fractional a => a -> a -> a) -> LispVal -> LispVal -> LispVal
+promoteFractionalBinaryOp :: (forall a. Fractional a => a -> a -> a) -> LispVal -> LispVal -> ThrowsError LispVal
 promoteFractionalBinaryOp op x y = case typeOf x `max` typeOf y of
-    ComplexType -> Complex (asComplex x `op` asComplex y)
-    FloatType   -> Float (asFloat x `op` asFloat y)
-    _           -> Ratio (asRatio x `op` asRatio y)
+    NotANumber  -> throwError $ TypeMismatch "number" x
+    ComplexType -> return $ Complex (asComplex x `op` asComplex y)
+    FloatType   -> return $ Float (asFloat x `op` asFloat y)
+    _           -> return $ Ratio (asRatio x `op` asRatio y)
 
-promoteFloatingUnaryOp :: (forall a. Floating a => a -> a) -> LispVal -> LispVal
+promoteFloatingUnaryOp :: (forall a. Floating a => a -> a) -> LispVal -> ThrowsError LispVal
 promoteFloatingUnaryOp op x = case typeOf x of
-    ComplexType -> Complex (op $ asComplex x)
-    _           -> Float (op $ asFloat x)
+    NotANumber  -> throwError $ TypeMismatch "number" x
+    ComplexType -> return $ Complex (op $ asComplex x)
+    _           -> return $ Float (op $ asFloat x)
 
-promoteFloatingBinaryOp :: (forall a. Floating a => a -> a -> a) -> LispVal -> LispVal -> LispVal
+promoteFloatingBinaryOp :: (forall a. Floating a => a -> a -> a) -> LispVal -> LispVal -> ThrowsError LispVal
 promoteFloatingBinaryOp op x y = case typeOf x `max` typeOf y of
-    ComplexType -> Complex (asComplex x `op` asComplex y)
-    _           -> Float (asFloat x `op` asFloat y)
+    NotANumber  -> throwError $ TypeMismatch "number" x
+    ComplexType -> return $ Complex (asComplex x `op` asComplex y)
+    _           -> return $ Float (asFloat x `op` asFloat y)
