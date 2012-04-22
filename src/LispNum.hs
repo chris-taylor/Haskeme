@@ -46,7 +46,7 @@ numericPrimitives =
     , ("<=", numericOrdOp (<=))
     , (">=", numericOrdOp (>=))
     , ("+", numericBinOp (+))
-    , ("-", numericBinOp (-))
+    , ("-", numericMinus)
     , ("*", numericBinOp (*))
     , ("/", fractionalBinOp (/))
     , ("abs", numericUnOp abs)
@@ -80,6 +80,10 @@ foldLeft1Error :: (LispVal -> LispVal -> ThrowsError LispVal) -> [LispVal] -> Th
 foldLeft1Error op xs = if length xs == 0
     then throwError $ NumArgs 1 xs
     else foldLeftError op (tail xs) (head xs)
+
+numericMinus :: [LispVal] -> ThrowsError LispVal
+numericMinus [x] = numericUnOp negate [x]
+numericMinus xs  = numericBinOp subtract xs
 
 numericBinOp :: (forall a. Num a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
 numericBinOp op params = foldLeft1Error (promoteNumericBinaryOp op) params
