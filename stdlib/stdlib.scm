@@ -116,5 +116,15 @@
         (xrange 0 a)
         (xrange a (car b))))
 
+(def (snoc x lst)
+    (if (null? lst)
+        (list x)
+        (cons (car lst) (snoc x (cdr lst)))))
+
+(def (append a b)
+    (if (null? b)
+        a
+        (append (snoc (car b) a) (cdr b))))
+
 (macro (when test . body)
     `(if ,test (do ,@body)))
