@@ -31,27 +31,10 @@ eval env (List (Atom "if" : exprs)) = evalIf env exprs
 eval env (List (Atom "case" : key : clauses)) = evalCase env key clauses
 eval env (List (Atom "=" : args)) = evalSet env args
 eval env (List (Atom "load" : params)) = evalLoad env params
-eval env (List [Atom "def", Atom var, form]) = eval env form >>= defineVar env var
-eval env (List (Atom "def" : List (Atom var : params) : body)) = 
-    makeNormalFunc env params body >>= defineVar env var
-eval env (List (Atom "def" : DottedList (Atom var : params) varargs : body)) =
-    makeVarArgs varargs env params body >>= defineVar env var
-eval env (List (Atom "macro" : List (Atom var : params) : body)) = 
-    makeNormalMacro env params body >>= defineVar env var
-eval env (List (Atom "macro" : DottedList (Atom var : params) varargs : body)) =
-    makeVarArgsMacro varargs env params body >>= defineVar env var
-eval env (List (Atom "fn" : List params : body)) = 
-    makeNormalFunc env params body
-eval env (List (Atom "fn" : DottedList params varargs : body)) = 
-    makeVarArgs varargs env params body
-eval env (List (Atom "fn" : varargs@(Atom _) : body)) = 
-    makeVarArgs varargs env [] body
-eval env (List (function : args)) = do
-    func <- eval env function
-    case func of 
-        (Macro {}) -> apply func args >>= eval env
-        _          -> mapM (eval env) args >>= apply func
-eval env (List []) = return $ List []
+eval env (List (Atom "def" : var : rest)) = evalDefine env var rest
+eval env (List (Atom "macro" : mac : rest)) = evalDefineMacro env mac rest
+eval env (List (Atom "fn" : params : body)) = evalLambda env params body
+eval env (List (function : args)) = evalApplication env function args
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
 -- Application
@@ -101,6 +84,32 @@ applyHash hash [key] = maybe (throwError $ KeyNotFound key $ Hash hash)
 applyHash hash args  = throwError $ NumArgs 1 args
 
 -- Evaluation of special forms
+
+evalApplication :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
+evalApplication env function args = do
+    func <- eval env function
+    case func of 
+        (Macro {}) -> apply func args >>= eval env
+        _          -> mapM (eval env) args >>= apply func
+
+evalDefine :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
+evalDefine env (Atom var) [form] =
+    eval env form >>= defineVar env var
+evalDefine env (List (Atom var : params)) body = 
+    makeNormalFunc env params body >>= defineVar env var
+evalDefine env (DottedList (Atom var : params) varargs) body =
+    makeVarArgs varargs env params body >>= defineVar env var
+
+evalDefineMacro :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
+evalDefineMacro env (List (Atom var : params)) body = 
+    makeNormalMacro env params body >>= defineVar env var
+evalDefineMacro env (DottedList (Atom var : params) varargs) body =
+    makeVarArgsMacro varargs env params body >>= defineVar env var
+
+evalLambda :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
+evalLambda env (List params) body = makeNormalFunc env params body
+evalLambda env (DottedList params varargs) body = makeVarArgs varargs env params body
+evalLambda env varargs@(Atom _) body = makeVarArgs varargs env [] body
 
 evalLet :: Env -> LispVal -> LispVal -> LispVal -> IOThrowsError LispVal
 evalLet env var form expr = do
