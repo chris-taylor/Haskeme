@@ -80,7 +80,7 @@
     (fold (flip cons) '() lst))
 
 (def (map func lst)
-    (foldr (fn (x y) (cons (apply func x) y)) '() lst))
+    (foldr (fn (x y) (cons (func x) y)) '() lst))
 
 (def (filter pred lst)
     (foldr (fn (x y)
