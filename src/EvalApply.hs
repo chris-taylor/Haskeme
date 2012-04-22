@@ -109,7 +109,7 @@ evalLet env var form expr = do
     eval newEnv expr
 
 evalWith :: Env -> [LispVal] -> LispVal -> IOThrowsError LispVal
-evalWith env []                       expr = eval env expr
+evalWith env []                  expr = eval env expr
 evalWith env (var : form : rest) expr = do
     (name, val) <- analyseBinding env var form
     newEnv <- bindLocals env (name, val)

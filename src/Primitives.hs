@@ -43,6 +43,7 @@ primitives = numericPrimitives ++
              , ("string<=?", strBoolBinop (<=))
              , ("string>=?", strBoolBinop (>=))
              , ("vector", vector)
+             , ("hash", hash)
              , ("symbol->string", typeTrans symbolToString)
              , ("string->symbol", typeTrans stringToSymbol)
              , ("vector->list", typeTrans vectorToList)
@@ -250,6 +251,9 @@ cons badArgs               = throwError $ NumArgs 2 badArgs
 
 vector :: [LispVal] -> ThrowsError LispVal
 vector xs = return $ Vector $ listArray (0, length xs - 1) xs
+
+hash :: [LispVal] -> ThrowsError LispVal
+hash xs = return $ Hash $ Map.fromList $ pairs xs
 
 listEquals :: ([LispVal] -> ThrowsError LispVal) -> [LispVal] -> [LispVal] -> ThrowsError LispVal
 listEquals eq arg1 arg2 = return $ Bool $ (length arg1 == length arg2) &&

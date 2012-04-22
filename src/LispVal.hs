@@ -8,7 +8,7 @@ module LispVal (
     , ThrowsError
     , IOThrowsError
     , Env
-    , showVal, nil, eqv, unwordsList
+    , showVal, nil, eqv, unwordsList, pairs, unpairs
     , makeNormalFunc, makeVarArgs, makeNormalMacro, makeVarArgsMacro
     ) where
 
@@ -95,6 +95,11 @@ nil = List []
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
+
+pairs :: [a] -> [(a,a)]
+pairs [ ]            = []
+pairs [_]            = []
+pairs (x : y : rest) = (x, y) : pairs rest
 
 unpairs :: [(a,a)] -> [a]
 unpairs [] = []

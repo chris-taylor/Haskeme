@@ -171,11 +171,6 @@ parseHash = do
     spaces >> char ')'
     return $ Hash $ Map.fromList $ pairs vals
 
-pairs :: [a] -> [(a,a)]
-pairs [ ]            = []
-pairs [_]            = []
-pairs (x : y : rest) = (x, y) : pairs rest
-
 parseFunction :: Parser LispVal
 parseFunction = do
     char '[' >> spaces
