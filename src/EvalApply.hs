@@ -103,25 +103,31 @@ applyHash hash args  = throwError $ NumArgs 1 args
 -- Evaluation of special forms
 
 evalLet :: Env -> LispVal -> LispVal -> LispVal -> IOThrowsError LispVal
-evalLet env (Atom var) form expr = do
-    val <- eval env form
-    newEnv <- liftIO $ bindVars env [(var,val)]
-    eval newEnv expr
-evalLet env (List (Atom var : params)) body expr = do
-    fun <- makeNormalFunc env params [body]
-    newEnv <- liftIO $ bindVars env [(var,fun)]
-    eval newEnv expr
-evalLet env (DottedList (Atom var : params) varargs) body expr = do
-    fun <- makeVarArgs varargs env params [body]
-    newEnv <- liftIO $ bindVars env [(var,fun)]
+evalLet env var form expr = do
+    (name, val) <- analyseBinding env var form
+    newEnv <- bindLocals env (name, val)
     eval newEnv expr
 
 evalWith :: Env -> [LispVal] -> LispVal -> IOThrowsError LispVal
 evalWith env []                       expr = eval env expr
-evalWith env (Atom var : form : rest) expr = do
-    val <- eval env form
-    newEnv <- liftIO $ bindVars env [(var,val)]
+evalWith env (var : form : rest) expr = do
+    (name, val) <- analyseBinding env var form
+    newEnv <- bindLocals env (name, val)
     evalWith newEnv rest expr
+
+analyseBinding :: Env -> LispVal -> LispVal -> IOThrowsError (String, LispVal)
+analyseBinding env (Atom var) form =
+    eval env form >>= named var
+analyseBinding env (List (Atom var : params)) body =
+    makeNormalFunc env params [body] >>= named var
+analyseBinding env (DottedList (Atom var : params) varargs) body =
+    makeVarArgs varargs env params [body] >>= named var
+
+named :: String -> LispVal -> IOThrowsError (String, LispVal)
+named name form = return (name, form)
+
+bindLocals :: Env -> (String, LispVal) -> IOThrowsError Env
+bindLocals env (var, val) = liftIO $ bindVars env [(var, val)]
 
 evalDo :: Env -> [LispVal] -> IOThrowsError LispVal
 evalDo env [] = throwError $ NumArgs 1 [List []]

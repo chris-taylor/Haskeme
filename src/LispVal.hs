@@ -118,7 +118,11 @@ makeNormalMacro = makeMacro Nothing
 makeVarArgsMacro :: (Monad m) => LispVal -> Env -> [LispVal] -> [LispVal] -> m LispVal
 makeVarArgsMacro = makeMacro . Just . showVal
 
--- These guys are here for debugging - it allows me to derive an instance for LispVal that will show me the underlying Haskell representation rather than the pretty-printed Haskeme version. For these to work correctly I need the TypeSynonymInstances and FlexibleInstances pragmas. If we're not using this debug capability then those pragmas don't need to be there.
+-- These guys are here for debugging - it allows me to derive an instance for
+-- LispVal that will show me the underlying Haskell representation rather than
+-- the pretty-printed Haskeme version. For these to work correctly I need the
+-- TypeSynonymInstances and FlexibleInstances pragmas. If we're not using this
+-- debug capability then those pragmas don't need to be there.
 
 instance Show Env where
     show _ = "<environment>"
