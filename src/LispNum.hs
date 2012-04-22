@@ -40,7 +40,12 @@ asNumber (Number n) = n
 
 numericPrimitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 numericPrimitives =
-    [ ("+", numericBinOp (+))
+    [ ("==", numericOrdOp (==))
+    , ("<", numericOrdOp (<))
+    , (">", numericOrdOp (>))
+    , ("<=", numericOrdOp (<=))
+    , (">=", numericOrdOp (>=))
+    , ("+", numericBinOp (+))
     , ("-", numericBinOp (-))
     , ("*", numericBinOp (*))
     , ("/", fractionalBinOp (/))
@@ -68,6 +73,16 @@ numericPrimitives =
 numericBinOp :: (forall a. Num a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
 numericBinOp op params = return $ foldl1 (promoteNumericBinaryOp op) params
 
+numericOrdOp :: (forall a. (Ord a, Num a) => a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
+numericOrdOp op params = case params of
+    [x]            -> throwError $ NumArgs 2 [x]
+    [x, y]         -> return $ x `o` y
+    (x : y : rest) -> let res@(Bool result) = x `o` y in
+                        if result
+                            then numericOrdOp op (y : rest)
+                            else return res
+    where o = promoteNumericOrdOp op
+
 integralBinOp :: (forall a. Integral a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
 integralBinOp op params = return $ foldl1 (promoteIntegralBinaryOp op) params
 
@@ -87,6 +102,12 @@ promoteNumericBinaryOp op x y = case typeOf x `max` typeOf y of
     FloatType   -> Float (asFloat x `op` asFloat y)
     RatioType   -> Ratio (asRatio x `op` asRatio y)
     IntType     -> Number (asNumber x `op` asNumber y)
+
+promoteNumericOrdOp :: (forall a. (Num a, Ord a) => a -> a -> Bool) -> LispVal -> LispVal -> LispVal
+promoteNumericOrdOp op x y = case typeOf x `max` typeOf y of
+    FloatType -> Bool (asFloat x `op` asFloat y)
+    RatioType -> Bool (asRatio x `op` asRatio y)
+    IntType   -> Bool (asNumber x `op` asNumber y)
 
 promoteIntegralBinaryOp :: (forall a. Integral a => a -> a -> a) -> LispVal -> LispVal -> LispVal
 promoteIntegralBinaryOp op x y = case typeOf x `max` typeOf y of
