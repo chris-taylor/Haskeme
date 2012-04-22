@@ -26,9 +26,17 @@ runOne args = do
         >>= hPutStrLn stderr
 
 runRepl :: IO ()
-runRepl = primitiveBindings >>= untilM_ (== "quit") (readPrompt "haskeme> ") . evalAndPrint
+runRepl = showHeader >> primitiveBindings >>= untilM_ (== "quit") (readPrompt "haskeme> ") . evalAndPrint
 
 -- IO Functions
+
+showHeader :: IO ()
+showHeader = do
+    putStrLn " _               _"
+    putStrLn "| |_   ___  ___ | |__ ___  _____  ___"
+    putStrLn "|    \\/ _ \\/ __/| | // _ \\|     \\/ _ \\"
+    putStrLn "| || | |_| \\__ \\|   \\  __/| | | |  __/"
+    putStrLn "|_||_|\\__/\\|___/|_|\\_\\___/|_|_|_|\\___/"
 
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
