@@ -39,6 +39,7 @@ parseExpr = parseAtom
         <|> parseUnquote
         <|> parseVector
         <|> parseHash
+        <|> parseFunction
         <|> parseList
 
 parseAtom :: Parser LispVal
