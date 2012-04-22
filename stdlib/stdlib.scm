@@ -107,11 +107,14 @@
 (def (make-vector n val)
     (apply vector (replicate n val)))
 
+(def (xrange a b)
+    (if (>= a b) '()
+        (cons a (xrange (+ 1 a) b))))
+
 (def (range a . b)
     (if (null? b)
-        (range 0 a)
-        (if (>= a b) '()
-            (cons a (range (+ 1 a) b)))))
+        (xrange 0 a)
+        (xrange a (car b))))
 
 (macro (when test . body)
     `(if ,test (do ,@body)))
