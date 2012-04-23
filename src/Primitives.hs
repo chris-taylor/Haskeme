@@ -30,6 +30,7 @@ primitives = numericPrimitives ++
              , ("procedure?", unaryBoolOp isProcedure)
              , ("macro?", unaryBoolOp isMacro)
              , ("port?", unaryBoolOp isPort)
+             , ("type", typeOf)
              , ("&&", boolBoolBinop (&&))
              , ("||", boolBoolBinop (||))
              , ("string=?", strBoolBinop (==))
@@ -39,6 +40,8 @@ primitives = numericPrimitives ++
              , ("string>=?", strBoolBinop (>=))
              , ("vector", vector)
              , ("hash", hash)
+             , ("keys", unaryOp keys)
+             , ("vals", unaryOp vals)
              , ("len", len)
              , ("symbol->string", typeTrans symbolToString)
              , ("string->symbol", typeTrans stringToSymbol)
@@ -49,6 +52,34 @@ primitives = numericPrimitives ++
              , ("cons", cons)
              , ("is", is)
              , ("iso", equal) ]
+
+typeOf :: [LispVal] -> ThrowsError LispVal
+typeOf xs = case xs of
+    [ ] -> throwError $ NumArgs 1 xs
+    [x] -> return $ t x
+    xs  -> return $ List $ map t xs
+    where
+        t (Atom _) = Atom "symbol"
+        t (List _) = Atom "pair"
+        t (DottedList _ _) = Atom "pair"
+        t (Vector _) = Atom "vector"
+        t (Hash _) = Atom "hash"
+        t (Number _) = Atom "number"
+        t (Ratio _) = Atom "number"
+        t (Float _) = Atom "number"
+        t (Complex _) = Atom "number"
+        t (Char _) = Atom "char"
+        t (String _) = Atom "string"
+        t (Bool _) = Atom "boolean"
+        t (PrimitiveFunc _) = Atom "procedure"
+        t (IOFunc _) = Atom "procedure"
+        t (Func {}) = Atom "procedure"
+        t (Macro {}) = Atom "macro"
+        t (Port _) = Atom "port"
+
+unaryOp :: (LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
+unaryOp op [x]   = op x
+unaryOp op other = throwError $ NumArgs 1 other
 
 boolBinop :: (LispVal -> ThrowsError a) -> (a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
 boolBinop unpacker op args = if length args /= 2
@@ -214,6 +245,14 @@ vectorToList notVector    = throwError $ TypeMismatch "vector" notVector
 listToVector :: LispVal -> ThrowsError LispVal
 listToVector (List xs) = return $ Vector $ listArray (0, length xs - 1) xs
 listToVector notList   = throwError $ TypeMismatch "list" notList
+
+keys :: LispVal -> ThrowsError LispVal
+keys (Hash hash) = return . List $ Map.keys hash
+keys notHash     = throwError $ TypeMismatch "hash" notHash
+
+vals :: LispVal -> ThrowsError LispVal
+vals (Hash hash) = return . List $ Map.elems hash
+vals notHash     = throwError $ TypeMismatch "hash" notHash
 
 car :: [LispVal] -> ThrowsError LispVal
 car [List (x:_)]          = return x
