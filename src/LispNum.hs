@@ -104,10 +104,10 @@ foldLeft1Error op xs = if length xs == 0
     else foldLeftError op (tail xs) (head xs)
 
 numericCast :: (LispVal -> LispVal) -> [LispVal] -> ThrowsError LispVal
-numericCast cast xs  = case length xs of
-    0 -> throwError $ NumArgs 1 xs
-    1 -> promote cast (head xs)
-    _ -> liftM List $ mapM (promote cast) xs
+numericCast cast xs  = case xs of
+    [ ] -> throwError $ NumArgs 1 xs
+    [x] -> promote cast x
+    _   -> liftM List $ mapM (promote cast) xs
     where
         promote cast x = case typeOf x of
             NotANumber -> throwError $ TypeMismatch "number" x
