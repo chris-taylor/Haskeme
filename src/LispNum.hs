@@ -13,12 +13,12 @@ import LispError
 
 data NumType = IntType | RatioType | FloatType | ComplexType | NotANumber deriving (Eq,Ord)
 
-typeOf :: LispVal -> NumType
-typeOf (Number _)  = IntType
-typeOf (Ratio _)   = RatioType
-typeOf (Float _)   = FloatType
-typeOf (Complex _) = ComplexType
-typeOf _           = NotANumber
+numType :: LispVal -> NumType
+numType (Number _)  = IntType
+numType (Ratio _)   = RatioType
+numType (Float _)   = FloatType
+numType (Complex _) = ComplexType
+numType _           = NotANumber
 
 asComplex :: LispVal -> Complex Double
 asComplex (Number n)  = fromInteger n
@@ -109,7 +109,7 @@ numericCast cast xs  = case xs of
     [x] -> promote cast x
     _   -> liftM List $ mapM (promote cast) xs
     where
-        promote cast x = case typeOf x of
+        promote cast x = case numType x of
             NotANumber -> throwError $ TypeMismatch "number" x
             _          -> return (cast x)
 
@@ -148,7 +148,7 @@ floatingUnOp op [arg] = promoteFloatingUnaryOp op arg
 floatingUnOp _  args  = throwError $ NumArgs 1 args
 
 promoteNumericBinaryOp :: (forall a. Num a => a -> a -> a) -> LispVal -> LispVal -> ThrowsError LispVal
-promoteNumericBinaryOp op x y = case typeOf x `max` typeOf y of
+promoteNumericBinaryOp op x y = case numType x `max` numType y of
     ComplexType -> return $ Complex (asComplex x `op` asComplex y)
     FloatType   -> return $ Float (asFloat x `op` asFloat y)
     RatioType   -> return $ Ratio (asRatio x `op` asRatio y)
@@ -156,7 +156,7 @@ promoteNumericBinaryOp op x y = case typeOf x `max` typeOf y of
     _           -> throwError $ TypeMismatch "number" y
 
 promoteNumericUnaryOp :: (forall a. Num a => a -> a) -> LispVal -> ThrowsError LispVal
-promoteNumericUnaryOp op x = case typeOf x of
+promoteNumericUnaryOp op x = case numType x of
     IntType     -> return $ Number (op $ asNumber x)
     RatioType   -> return $ Ratio (op $ asRatio x)
     FloatType   -> return $ Float (op $ asFloat x)
@@ -164,33 +164,33 @@ promoteNumericUnaryOp op x = case typeOf x of
     NotANumber  -> throwError $ TypeMismatch "number" x
 
 promoteNumericOrdOp :: (forall a. (Num a, Ord a) => a -> a -> Bool) -> LispVal -> LispVal -> ThrowsError LispVal
-promoteNumericOrdOp op x y = case typeOf x `max` typeOf y of
+promoteNumericOrdOp op x y = case numType x `max` numType y of
     FloatType -> return $ Bool (asFloat x `op` asFloat y)
     RatioType -> return $ Bool (asRatio x `op` asRatio y)
     IntType   -> return $ Bool (asNumber x `op` asNumber y)
     _         -> throwError $ TypeMismatch "int, rational or float" y
 
 promoteIntegralBinaryOp :: (forall a. Integral a => a -> a -> a) -> LispVal -> LispVal -> ThrowsError LispVal
-promoteIntegralBinaryOp op x y = case (typeOf x, typeOf y) of
+promoteIntegralBinaryOp op x y = case (numType x, numType y) of
     (IntType, IntType) -> return $ Number (asNumber x `op` asNumber y)
     (IntType, _)       -> throwError $ TypeMismatch "integer" y
     (_, _)             -> throwError $ TypeMismatch "integer" x
 
 promoteFractionalBinaryOp :: (forall a. Fractional a => a -> a -> a) -> LispVal -> LispVal -> ThrowsError LispVal
-promoteFractionalBinaryOp op x y = case typeOf x `max` typeOf y of
+promoteFractionalBinaryOp op x y = case numType x `max` numType y of
     NotANumber  -> throwError $ TypeMismatch "number" y
     ComplexType -> return $ Complex (asComplex x `op` asComplex y)
     FloatType   -> return $ Float (asFloat x `op` asFloat y)
     _           -> return $ Ratio (asRatio x `op` asRatio y)
 
 promoteFloatingUnaryOp :: (forall a. Floating a => a -> a) -> LispVal -> ThrowsError LispVal
-promoteFloatingUnaryOp op x = case typeOf x of
+promoteFloatingUnaryOp op x = case numType x of
     NotANumber  -> throwError $ TypeMismatch "number" x
     ComplexType -> return $ Complex (op $ asComplex x)
     _           -> return $ Float (op $ asFloat x)
 
 promoteFloatingBinaryOp :: (forall a. Floating a => a -> a -> a) -> LispVal -> LispVal -> ThrowsError LispVal
-promoteFloatingBinaryOp op x y = case typeOf x `max` typeOf y of
+promoteFloatingBinaryOp op x y = case numType x `max` numType y of
     NotANumber  -> throwError $ TypeMismatch "number" y
     ComplexType -> return $ Complex (asComplex x `op` asComplex y)
     _           -> return $ Float (asFloat x `op` asFloat y)
