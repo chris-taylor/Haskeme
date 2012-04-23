@@ -38,6 +38,24 @@ asRatio (Ratio n)  = n
 asNumber :: LispVal -> Integer
 asNumber (Number n) = n
 
+toComplex :: LispVal -> LispVal
+toComplex = Complex . asComplex
+
+toFloat :: LispVal -> LispVal
+toFloat (Complex n) = Float $ realPart n
+toFloat x           = Float $ asFloat x
+
+toRatio :: LispVal -> LispVal
+toRatio (Complex n) = Ratio $ toRational $ realPart n
+toRatio (Float n)   = Ratio $ toRational n
+toRatio x           = Ratio $ asRatio x
+
+toNumber :: LispVal -> LispVal
+toNumber (Complex n) = Number $ round $ realPart n
+toNumber (Float n)   = Number $ round n
+toNumber (Ratio n)   = Number $ round $ (fromInteger $ numerator n) / (fromInteger $ denominator n)
+toNumber x           = Number $ asNumber x
+
 numericPrimitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 numericPrimitives =
     [ ("==", numericOrdOp (==))
@@ -68,8 +86,12 @@ numericPrimitives =
     , ("expt", floatingBinOp (**))
     , ("div", integralBinOp div)
     , ("mod", integralBinOp mod)
-    , ("quotient", integralBinOp quot)
-    , ("remainder", integralBinOp rem) ]
+    , ("quot", integralBinOp quot)
+    , ("rem", integralBinOp rem)
+    , ("as-integer", numericCast toNumber)
+    , ("as-rational", numericCast toRatio)
+    , ("as-real", numericCast toFloat)
+    , ("as-complex", numericCast toComplex) ]
 
 foldLeftError :: (b -> a -> ThrowsError b) -> [a] -> b -> ThrowsError b
 foldLeftError op xs res = if length xs == 0
@@ -80,6 +102,16 @@ foldLeft1Error :: (LispVal -> LispVal -> ThrowsError LispVal) -> [LispVal] -> Th
 foldLeft1Error op xs = if length xs == 0
     then throwError $ NumArgs 1 xs
     else foldLeftError op (tail xs) (head xs)
+
+numericCast :: (LispVal -> LispVal) -> [LispVal] -> ThrowsError LispVal
+numericCast cast xs  = case length xs of
+    0 -> throwError $ NumArgs 1 xs
+    1 -> promote cast (head xs)
+    _ -> liftM List $ mapM (promote cast) xs
+    where
+        promote cast x = case typeOf x of
+            NotANumber -> throwError $ TypeMismatch "number" x
+            _          -> return (cast x)
 
 numericMinus :: [LispVal] -> ThrowsError LispVal
 numericMinus [x] = numericUnOp negate [x]
