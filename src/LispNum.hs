@@ -83,7 +83,7 @@ foldLeft1Error op xs = if length xs == 0
 
 numericMinus :: [LispVal] -> ThrowsError LispVal
 numericMinus [x] = numericUnOp negate [x]
-numericMinus xs  = numericBinOp subtract xs
+numericMinus xs  = numericBinOp (-) xs
 
 numericBinOp :: (forall a. Num a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
 numericBinOp op params = foldLeft1Error (promoteNumericBinaryOp op) params
