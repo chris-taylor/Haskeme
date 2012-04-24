@@ -5,7 +5,6 @@ import Control.Monad.Error
 import IO hiding (try)
 
 import LispVal
-import LispError
 import LispParser
 import Primitives
 import IOPrimitives

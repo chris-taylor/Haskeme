@@ -5,7 +5,6 @@ import Data.Array
 import qualified Data.Map as Map
 
 import LispVal
-import LispError
 import LispParser
 import Variables
 

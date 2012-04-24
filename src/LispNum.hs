@@ -9,7 +9,6 @@ import Ratio
 import Complex
 
 import LispVal
-import LispError
 
 data NumType = IntType | RatioType | FloatType | ComplexType | NotANumber deriving (Eq,Ord)
 

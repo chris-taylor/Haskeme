@@ -13,7 +13,6 @@ import Data.Array
 import Char (digitToInt)
 
 import LispVal
-import LispError
 
 lispDef :: LanguageDef ()
 lispDef = emptyDef

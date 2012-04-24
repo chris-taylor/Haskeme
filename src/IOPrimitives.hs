@@ -4,7 +4,6 @@ import IO
 import Control.Monad.Error
 
 import LispVal
-import LispError
 import LispParser
 import EvalApply
 

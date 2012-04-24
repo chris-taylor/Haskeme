@@ -6,7 +6,6 @@ import qualified Data.Map as Map
 import Control.Monad.Error
 
 import LispVal
-import LispError
 
 nullEnv :: IO Env
 nullEnv = newIORef []

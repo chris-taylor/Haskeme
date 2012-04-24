@@ -9,7 +9,6 @@ import Ratio
 import Complex
 
 import LispVal
-import LispError
 import LispNum
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
