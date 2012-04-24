@@ -30,6 +30,9 @@ runRepl = showHeader >> primitiveBindings >>= untilM_ (== "quit") (readPrompt "h
 
 -- IO Functions
 
+version :: String
+version = "0.1"
+
 showHeader :: IO ()
 showHeader = do
     putStrLn " _               _"
@@ -37,6 +40,8 @@ showHeader = do
     putStrLn "|    \\/ _ \\/ __/| | // _ \\|     \\/ _ \\"
     putStrLn "| || | |_| \\__ \\|   \\  __/| | | |  __/"
     putStrLn "|_||_|\\__/\\|___/|_|\\_\\___/|_|_|_|\\___/"
+    putStrLn "   Author: github.com/chris-taylor"
+    putStrLn $ "  Version: " ++ version
 
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
