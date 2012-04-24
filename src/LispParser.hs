@@ -2,6 +2,8 @@ module LispParser (readExpr, readExprList) where
 
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec
+import Text.Parsec.Language
+import qualified Text.Parsec.Token as P
 import Numeric (readOct, readHex, readFloat)
 import Data.Array
 import qualified Data.Map as Map
@@ -13,11 +15,32 @@ import Char (digitToInt)
 import LispVal
 import LispError
 
+lispDef :: LanguageDef ()
+lispDef = emptyDef
+    { P.commentStart   = "#|"
+    , P.commentEnd     = "|#"
+    , P.commentLine    = ";"
+    , P.nestedComments = True
+    , P.identStart     = letter <|> symbol
+    , P.identLetter    = letter <|> digit <|> symbol
+    , P.caseSensitive  = True }
+
+lexer      = P.makeTokenParser lispDef
+dot        = P.dot lexer
+parens     = P.parens lexer
+brackets   = P.brackets lexer
+identifier = P.identifier lexer
+whiteSpace = P.whiteSpace lexer
+lexeme     = P.lexeme lexer
+natural    = P.natural lexer
+float      = P.float lexer
+stringLit  = P.stringLiteral lexer
+
 readExpr :: String -> ThrowsError LispVal
 readExpr = readOrThrow parseExpr
 
 readExprList :: String -> ThrowsError [LispVal]
-readExprList = readOrThrow (sepBy parseExpr spaces1)
+readExprList = readOrThrow exprList
 
 readOrThrow :: Parser a -> String -> ThrowsError a
 readOrThrow parser input = case parse parser "lisp" input of
@@ -25,14 +48,14 @@ readOrThrow parser input = case parse parser "lisp" input of
     Right val -> return val
 
 parseExpr :: Parser LispVal
-parseExpr = parseAtom
-        <|> parseString
-        <|> try parseBool
-        <|> try parseComplex
+parseExpr = try parseComplex
         <|> try parseFloat
         <|> try parseRatio
         <|> try parseNumber
+        <|> try parseBool
         <|> try parseChar
+        <|> parseAtom
+        <|> parseString
         <|> parseQuote
         <|> parseQuasiquote
         <|> try parseUnquoteSplicing
@@ -43,17 +66,10 @@ parseExpr = parseAtom
         <|> parseList
 
 parseAtom :: Parser LispVal
-parseAtom = do
-    first <- letter <|> symbol
-    rest <- many (letter <|> digit <|> symbol)
-    return $ Atom (first:rest)
+parseAtom = identifier >>= return . Atom
 
 parseString :: Parser LispVal
-parseString = do
-    char '"'
-    x <- many $ escapedChar <|> noneOf "\""
-    char '"'
-    return $ String x
+parseString = stringLit >>= return . String
 
 parseBool :: Parser LispVal
 parseBool = do
@@ -64,65 +80,21 @@ parseBool = do
                 'f' -> Bool False
 
 parseComplex :: Parser LispVal
-parseComplex = do
-    x <- (try parseFloat <|> parseDec1)
-    char '+'
-    y <- (try parseFloat <|> parseDec1)
-    char 'i'
-    return $ Complex (toDouble x :+ toDouble y)
+parseComplex = signed Complex complex
 
 parseFloat :: Parser LispVal
-parseFloat = do
-    x <- many1 digit
-    char '.'
-    y <- many1 digit
-    return $ Float $ fst . head $ readFloat (x ++ "." ++ y)
+parseFloat = signed Float float
 
 parseRatio :: Parser LispVal
-parseRatio = do
-    x <- many1 digit
-    char '/'
-    y <- many1 digit
-    return $ Ratio $ (read x) % (read y)
+parseRatio = signed Ratio rational
 
 parseNumber :: Parser LispVal
-parseNumber = do
-    num <- parseDec1 <|> parseDec2 <|> parseHex <|> parseOct <|> parseBin
-    return num
-
-parseDec1 :: Parser LispVal
-parseDec1 = do
-    x <- many1 digit
-    (return . Number . read) x
-
-parseDec2 :: Parser LispVal
-parseDec2 = do
-    try $ string "#d"
-    x <- many1 digit
-    (return . Number . read) x
-
-parseHex :: Parser LispVal
-parseHex = do
-    try $ string "#x"
-    x <- many1 hexDigit
-    return $ Number (hex2dig x)
-
-parseOct :: Parser LispVal
-parseOct = do
-    try $ string "#o"
-    x <- many1 octDigit
-    return $ Number (oct2dig x)
-
-parseBin :: Parser LispVal
-parseBin = do
-    try $ string "#b"
-    x <- many1 (oneOf "01")
-    return $ Number (bin2dig x)
+parseNumber = signed Number natural
 
 parseChar :: Parser LispVal
-parseChar = liftM Char $ string "#\\" >> (newline <|> space <|> anyChar)
+parseChar = liftM Char $ string "#\\" >> (try newline <|> try space <|> anyChar)
     where newline = string "newline" >> return '\n'
-          space = string "space" >> return ' '
+          space   = string "space" >> return ' '
 
 parseQuote :: Parser LispVal
 parseQuote = do
@@ -151,32 +123,26 @@ parseUnquote = do
 parseList :: Parser LispVal
 parseList = do
     char '(' >> spaces
-    hd <- parseExpr `sepEndBy` spaces1
-    do char '.' >> spaces1
-       tl <- parseExpr
-       spaces >> char ')'
-       return $ DottedList hd tl
-     <|> (spaces >> char ')' >> (return $ List hd))
+    hd <- exprList
+    do  char '.' >> whiteSpace
+        tl <- parseExpr
+        spaces >> char ')'
+        return $ DottedList hd tl
+      <|> (spaces >> char ')' >> (return $ List hd))
 
 parseVector :: Parser LispVal
 parseVector = do
-    string "$(" >> spaces
-    vals <- sepEndBy parseExpr spaces1
-    spaces >> char ')'
+    vals <- char '$' >> parens exprList
     return $ Vector (listArray (0, length vals - 1) vals)
 
 parseHash :: Parser LispVal
 parseHash = do
-    string "#(" >> spaces
-    vals <- sepEndBy parseExpr spaces1
-    spaces >> char ')'
+    vals <- char '#' >> parens exprList
     return $ Hash $ Map.fromList $ pairs vals
 
 parseFunction :: Parser LispVal
 parseFunction = do
-    char '[' >> spaces
-    body <- sepEndBy parseExpr spaces1
-    spaces >> char ']'
+    body <- brackets exprList
     return $ List [Atom "fn", List [Atom "_"], List body]
 
 -- Parsing helper functions
@@ -187,31 +153,37 @@ symbol = oneOf "!%&|*+-/:<=>?@^_~"
 spaces1 :: Parser ()
 spaces1 = skipMany1 space
 
-escapedChar :: Parser Char
-escapedChar = do
-    char '\\'
-    x <- oneOf "\\\"tn"
-    return $ case x of
-        '\\' -> '\\'
-        '\"' -> '\"'
-        'n'  -> '\n'
-        't'  -> '\t'
+exprList :: Parser [LispVal]
+exprList = many (lexeme parseExpr)
 
-sign :: Parser Char
-sign = option ' ' $ char '-'
+rational :: Parser Rational
+rational = do
+    x <- natural
+    char '/'
+    y <- natural
+    return (x % y)
 
-toDouble :: LispVal -> Double
-toDouble (Float f)  = f
-toDouble (Number n) = fromIntegral n
+complex :: Parser (Complex Double)
+complex = do
+    x <- parseEither float natural
+    s <- oneOf "+-"
+    y <- parseEither float natural
+    return $ case s of
+        '+' -> toDouble x :+ toDouble y
+        '-' -> toDouble x :+ negate (toDouble y)
+        where toDouble = either id fromIntegral
 
-oct2dig x = fst (readOct x !! 0)
-hex2dig x = fst (readHex x !! 0)
-bin2dig   = bin2dig' 0
-bin2dig' digint ""  = digint
-bin2dig' digint (x:xs) = bin2dig' old xs where
-    old = 2 * digint + (if x == '0' then 0 else 1)
+parseEither :: Parser a -> Parser b -> Parser (Either a b)
+parseEither left right = do
+    l' <- optionMaybe (try left)
+    case l' of
+        Nothing -> right >>= return . Right
+        Just l  -> return (Left l)
 
---readBin :: Integral a => String -> a
---readBin (' ':s) = readBin s
---readBin ('-':s) = negate $ readBin s
---readBin s       = fst . head $ readInt 2 (`elem` "01") digitToInt s
+signed :: Num a => (a -> LispVal) -> Parser a -> Parser LispVal
+signed constructor parser = do
+    s <- optionMaybe (oneOf "+-")
+    x <- parser
+    return $ constructor $ case s of
+        Just '-' -> negate x
+        _        -> x
