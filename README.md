@@ -1,6 +1,6 @@
 # Haskeme
 
-Haskeme is a Scheme interpreter written in Haskell. It's very much a work-in-progress, as well as a way for me to experiment with new ideas and syntax. The skeleton of the interpreter is based on the excellent tutorial found at:
+Haskeme is a Lisp interpreter written in Haskell. It's very much a work-in-progress, as well as a way for me to experiment with new ideas and syntax. The skeleton of the interpreter is based on the excellent tutorial found at:
 
 * http://en.wikibooks.org/wiki/Write_Yourself_a_Scheme_in_48_Hours/First_Steps
 
@@ -16,10 +16,9 @@ I've also borrowed some ideas from Arc and Q:
   - Numeric types (Integer, Rational, Float, Complex)
   - Vectors (constant access time lists)
   - Hashes (key-value stores)
-  - Functions are first-class values
+  - Procedures
 * Control flow
-  - `if` statement: `(if test1 conseq1 ... testn conseqn alternative)`
-  - `case` statement: `(case x (val1 result1) ... (valn resultn))`
+  - Conditionals (`if`, `case`)
   - Statement grouping with `do`
 * Scope
   - Top-level definitions with `def`
@@ -30,12 +29,11 @@ I've also borrowed some ideas from Arc and Q:
   - Set elements of strings, vectors and hashes too: `(= (vec 0) 1)`
 * Functions:
   - User defined functions, lambdas (with `fn` keyword) and lexical closures
-  - Notation for unary functions: `[+ _ 1]` for `(fn (x) (+ x 1))`
+  - Notation for unary functions: `[+ _ 1]`
   - Full suite of numeric functions (trigonometry, sqrt, exp/log etc)
   - Can call strings, vectors and hashes as if they were functions: `(vec 0)` etc.
 * I/O
-  - Read from stdin or any file
-  - Write to stdout or any file
+  - Read/write to stdin/stdout or any file
   - Load libraries from a file
 * Basic macro system:
   - Whole language, including user defined functions, available at macro expansion time
@@ -45,8 +43,9 @@ I've also borrowed some ideas from Arc and Q:
 ## Still to come
 
 * Tail call optimization
+* Separate macro compilation phase
+* Compiler
+* Build system
 * Continuations
-* Comments
-* Error handling for numeric operations
 * Stream data type
 * R5RS compliance

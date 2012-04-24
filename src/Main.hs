@@ -35,12 +35,12 @@ version = "0.1"
 
 showHeader :: IO ()
 showHeader = do
-    putStrLn " _               _"
-    putStrLn "| |_   ___  ___ | |__ ___  _____  ___"
-    putStrLn "|    \\/ _ \\/ __/| | // _ \\|     \\/ _ \\"
-    putStrLn "| || | |_| \\__ \\|   \\  __/| | | |  __/"
-    putStrLn "|_||_|\\__/\\|___/|_|\\_\\___/|_|_|_|\\___/"
-    putStrLn "   Author: github.com/chris-taylor"
+    putStrLn $ " _               _"
+    putStrLn $ "| |_   ___  ___ | |__ ___  _____  ___"
+    putStrLn $ "|    \\/ _ \\/ __/| | // _ \\|     \\/ _ \\"
+    putStrLn $ "| || | |_| \\__ \\|   \\  __/| | | |  __/"
+    putStrLn $ "|_||_|\\__/\\|___/|_|\\_\\___/|_|_|_|\\___/"
+    putStrLn $ "   Author: github.com/chris-taylor"
     putStrLn $ "  Version: " ++ version
 
 flushStr :: String -> IO ()
