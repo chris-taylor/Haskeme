@@ -40,17 +40,29 @@ setCar envRef var val = do
           (\varRef -> do
             oldVal <- liftIO $ readIORef varRef
             case oldVal of
-                List (_ : cdr)          -> liftIO $ writeIORef varRef (List (val : cdr))
-                DottedList (_ : cdr) tl -> liftIO $ writeIORef varRef (DottedList (val : cdr) tl)
-                Vector arr              -> liftIO $ writeIORef varRef (Vector $ listArray bds (val : cdr)) where
-                    bds       = bounds arr
-                    (_ : cdr) = elems arr
-                String (_ : cdr) -> liftIO $ writeIORef varRef (case val of
-                    Char c -> String (c : cdr)
-                    _      -> List (val : map Char cdr))
+                List (_ : cdr)          -> setListCar varRef val cdr
+                DottedList (_ : cdr) tl -> setDottedListCar varRef val cdr tl
+                Vector arr              -> setVectorCar varRef val arr
+                String (_ : cdr)        -> setStringCar varRef val cdr
                 other    -> throwError $ TypeMismatch "pair, vector, string" other)
           (lookup var env)
     return val
+
+setListCar :: IORef LispVal -> LispVal -> [LispVal] -> IOThrowsError ()
+setListCar varRef val cdr = liftIO $ writeIORef varRef $ List (val : cdr)
+
+setDottedListCar :: IORef LispVal -> LispVal -> [LispVal] -> LispVal -> IOThrowsError ()
+setDottedListCar varRef val cdr tl = liftIO $ writeIORef varRef $ DottedList (val : cdr) tl
+
+setVectorCar :: IORef LispVal -> LispVal -> VectorType -> IOThrowsError ()
+setVectorCar varRef val arr = liftIO $ writeIORef varRef $ Vector $ listArray bds (val : cdr) where
+    bds       = bounds arr
+    (_ : cdr) = elems arr
+
+setStringCar :: IORef LispVal -> LispVal -> String -> IOThrowsError ()
+setStringCar varRef val cdr = liftIO $ writeIORef varRef (case val of
+    Char c -> String (c : cdr)
+    _      -> List (val : map Char cdr))
 
 setCdr :: Env -> String -> LispVal -> IOThrowsError LispVal
 setCdr envRef var val = do
