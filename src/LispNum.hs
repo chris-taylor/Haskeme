@@ -113,15 +113,34 @@ numericCast cast xs  = case xs of
             NotANumber -> throwError $ TypeMismatch "number" x
             _          -> return (cast x)
 
+pushDown :: LispVal -> ThrowsError LispVal
+pushDown num@(Complex z) = if realPart z == 0
+    then pushDown $ Float (realPart z)
+    else return num
+pushDown num@(Float x)   = if isFloatIntegral x
+    then return $ Number $ round x
+    else return num
+pushDown num@(Ratio x)   = if isRatioIntegral x
+    then return $ Number $ numerator x
+    else return num
+pushDown num@(Number n)  = return num
+pushDown other           = throwError $ TypeMismatch "number" other
+
+isFloatIntegral :: Double -> Bool
+isFloatIntegral x = fracPart == 0 where fracPart = x - fromIntegral (round x)
+
+isRatioIntegral :: Rational -> Bool
+isRatioIntegral x = denominator x == 1
+
 numericMinus :: [LispVal] -> ThrowsError LispVal
 numericMinus [x] = numericUnOp negate [x]
 numericMinus xs  = numericBinOp (-) xs
 
 numericBinOp :: (forall a. Num a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
-numericBinOp op params = foldLeft1Error (promoteNumericBinaryOp op) params
+numericBinOp op params = foldLeft1Error (promoteNumericBinaryOp op) params >>= pushDown
 
 numericUnOp :: (forall a. Num a => a -> a) -> [LispVal] -> ThrowsError LispVal
-numericUnOp op [arg] = promoteNumericUnaryOp op arg
+numericUnOp op [arg] = promoteNumericUnaryOp op arg >>= pushDown
 numericUnOp op args  = throwError $ NumArgs 1 args
 
 numericOrdOp :: (forall a. (Ord a, Num a) => a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
@@ -138,13 +157,13 @@ integralBinOp :: (forall a. Integral a => a -> a -> a) -> [LispVal] -> ThrowsErr
 integralBinOp op params = foldLeft1Error (promoteIntegralBinaryOp op) params
 
 fractionalBinOp :: (forall a. Fractional a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
-fractionalBinOp op params = foldLeft1Error (promoteFractionalBinaryOp op) params
+fractionalBinOp op params = foldLeft1Error (promoteFractionalBinaryOp op) params >>= pushDown
 
 floatingBinOp :: (forall a. Floating a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
-floatingBinOp op args = foldLeft1Error (promoteFloatingBinaryOp op) args
+floatingBinOp op args = foldLeft1Error (promoteFloatingBinaryOp op) args >>= pushDown
 
 floatingUnOp :: (forall a. Floating a => a -> a) -> [LispVal] -> ThrowsError LispVal
-floatingUnOp op [arg] = promoteFloatingUnaryOp op arg
+floatingUnOp op [arg] = promoteFloatingUnaryOp op arg >>= pushDown
 floatingUnOp _  args  = throwError $ NumArgs 1 args
 
 promoteNumericBinaryOp :: (forall a. Num a => a -> a -> a) -> LispVal -> LispVal -> ThrowsError LispVal
