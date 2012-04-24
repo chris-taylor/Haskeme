@@ -46,6 +46,7 @@ I've also borrowed some ideas from Arc and Q:
 * Separate macro compilation phase
 * Compiler
 * Build system
+* Random numbers
 * Continuations
 * Stream data type
 * R5RS compliance
