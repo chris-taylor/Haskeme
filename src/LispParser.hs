@@ -80,7 +80,19 @@ parseBool = do
                 'f' -> Bool False
 
 parseComplex :: Parser LispVal
-parseComplex = signed Complex complex
+parseComplex = let toDouble = either id fromIntegral in do
+    s <- optionMaybe (oneOf "+-")
+    x <- parseEither float natural
+    t <- oneOf "+-"
+    y <- parseEither float natural
+    char 'i'
+    let real = case s of
+            Just '-' -> negate $ toDouble x
+            _        -> toDouble x
+        imag = case t of
+            '-' -> negate $ toDouble y
+            '+' -> toDouble y
+    return $ Complex $ real :+ imag
 
 parseFloat :: Parser LispVal
 parseFloat = signed Float float
@@ -162,16 +174,6 @@ rational = do
     char '/'
     y <- natural
     return (x % y)
-
-complex :: Parser (Complex Double)
-complex = do
-    x <- parseEither float natural
-    s <- oneOf "+-"
-    y <- parseEither float natural
-    return $ case s of
-        '+' -> toDouble x :+ toDouble y
-        '-' -> toDouble x :+ negate (toDouble y)
-        where toDouble = either id fromIntegral
 
 parseEither :: Parser a -> Parser b -> Parser (Either a b)
 parseEither left right = do
