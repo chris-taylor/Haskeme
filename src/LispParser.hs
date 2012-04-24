@@ -166,7 +166,7 @@ spaces1 :: Parser ()
 spaces1 = skipMany1 space
 
 exprList :: Parser [LispVal]
-exprList = many (lexeme parseExpr)
+exprList = whiteSpace >> many (lexeme parseExpr)
 
 rational :: Parser Rational
 rational = do

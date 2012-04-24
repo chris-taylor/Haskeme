@@ -1,13 +1,13 @@
 {-# LANGUAGE NoMonomorphismRestriction, TypeSynonymInstances, FlexibleInstances #-}
 
 module LispVal (
-      LispVal (Atom,List,DottedList,Vector,Hash,Number,Ratio,Float,Complex,Char,String,Bool,PrimitiveFunc,IOFunc,Func,Macro,Port)
+      LispVal (..)
+    , LispError (..)
     , VectorType
     , HashType
-    , LispError (NumArgs,Parser,BadSpecialForm,NotFunction,TypeMismatch,UnboundVar,OutOfRange,KeyNotFound,Default)
+    , Env
     , ThrowsError
     , IOThrowsError
-    , Env
     , showVal, nil, eqv, unwordsList, pairs, unpairs
     , makeNormalFunc, makeVarArgs, makeNormalMacro, makeVarArgsMacro
     ) where
