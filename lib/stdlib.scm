@@ -142,3 +142,9 @@
     `(do
         (= ,lst (cons ,val ,lst))
         'ok))
+
+(macro (repeat n block)
+    `(if
+        (== ,n 1) ,block
+        (do ,block
+            (repeat (- ,n 1) ,block))))
