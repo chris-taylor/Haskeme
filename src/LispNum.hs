@@ -114,7 +114,7 @@ numericCast cast xs  = case xs of
             _          -> return (cast x)
 
 pushDown :: LispVal -> ThrowsError LispVal
-pushDown num@(Complex z) = if realPart z == 0
+pushDown num@(Complex z) = if imagPart z == 0
     then pushDown $ Float (realPart z)
     else return num
 pushDown num@(Float x)   = if isFloatIntegral x
