@@ -101,7 +101,7 @@
     (cdr (cdr x)))
 
 (def (replicate n val)
-    (if (= n 0) '()
+    (if (is n 0) '()
         (cons val (replicate (- n 1) val))))
 
 (def (make-vector n val)
@@ -128,3 +128,17 @@
 
 (macro (when test . body)
     `(if ,test (do ,@body)))
+
+(macro (unless test . body)
+    `(if (not ,test) (do ,@body)))
+
+(macro (pop lst)
+    `(do
+        (def res (car ,lst))
+        (= ,lst (cdr ,lst))
+        res))
+
+(macro (push val lst)
+    `(do
+        (= ,lst (cons ,val ,lst))
+        'ok))
