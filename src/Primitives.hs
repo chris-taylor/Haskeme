@@ -273,9 +273,10 @@ cdr [notList]               = throwError $ TypeMismatch "pair" notList
 cdr badArgs                 = throwError $ NumArgs 1 badArgs
 
 cons :: [LispVal] -> ThrowsError LispVal
+cons [Char c, List []]     = return $ String [c]
+cons [Char c, String s]    = return $ String (c:s)
 cons [x, List xs]          = return $ List (x:xs)
 cons [x, DottedList xs tl] = return $ DottedList (x:xs) tl
-cons [Char c, String s]    = return $ String (c:s)
 cons [x, String s]         = return $ List (x : map Char s)
 cons [x, Vector arr]       = return $ Vector $ listArray (0, n+1) (x:els) where
                                 (_, n) = bounds arr
@@ -299,7 +300,7 @@ len' (DottedList xs tl) = return $ 1 + length xs
 len' (Vector arr)       = let (_, n) = bounds arr in return (n + 1)
 len' (Hash hash)        = return $ length $ Map.keys hash
 len' (String str)       = return $ length str
-len' other = throwError $ TypeMismatch "pair, vector, hash, string" other
+len' other = throwError $ TypeMismatch "pair, vector, hash or string" other
 
 listEquals :: ([LispVal] -> ThrowsError LispVal) -> [LispVal] -> [LispVal] -> ThrowsError LispVal
 listEquals eq arg1 arg2 = return $ Bool $ (length arg1 == length arg2) &&
