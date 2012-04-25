@@ -1,26 +1,38 @@
+; Combinations of CAR and CDR.
+
+(def (caar x) (car (car x)))
+(def (cadr x) (car (cdr x)))
+(def (cdar x) (cdr (car x)))
+(def (cddr x) (cdr (cdr x)))
+(def (caaar x)) (car (caar x))
+(def (caadr x)) (car (cadr x))
+(def (cadar x)) (car (cdar x))
+(def (caddr x)) (car (cddr x))
+(def (cdaar x)) (cdr (caar x))
+(def (cdadr x)) (cdr (cadr x))
+(def (cddar x)) (cdr (cdar x))
+(def (cdddr x)) (cdr (cddr x))
+
 ; NIL returns the empty list
 
 (def nil '())
 
-; NOT is unary negation of values
+; NOT Unary negation
 
 (def (not x)
     (if x #f #t))
 
 ; NULL returns true if the object is the empty list
 
-(def (null obj)
-    (is obj nil))
+(def (null obj) (is obj nil))
 
 ; LIST returns a list containing all of its arguments
 
-(def (list . objs)
-    objs)
+(def (list . objs) objs)
 
 ; ID is the identity function
 
-(def (id obj)
-    obj)
+(def (id obj) obj)
 
 ; FLIP returns a function show arguments are flipped as compared to the input
 ; function
@@ -50,20 +62,15 @@
 
 ; ZERO, POSITIVE, NEGATIVE, ODD and EVEN are self-explanatory.
 
-(def zero
-    (curry == 0))
+(def zero [== _ 0])
 
-(def positive
-    (curry < 0))
+(def positive [> _ 0])
 
-(def negative
-    (curry > 0))
+(def negative [< _ 0])
 
-(def (odd num)
-    (== (mod num 2) 1))
+(def odd [== (mod _ 2) 1])
 
-(def (even num)
-    (== (mod num 2) 0))
+(def even [== (mod _ 2) 0])
 
 ;;;; Higher-order functions
 
@@ -149,20 +156,6 @@
 
 (def (reverse lst)
     (fold (flip cons) '() lst))
-
-; CAAR, CADR, CDAR and CDDR are combinations of CAR and CDR.
-
-(def (caar x)
-    (car (car x)))
-
-(def (cadr x)
-    (car (cdr x)))
-
-(def (cdar x)
-    (cdr (car x)))
-
-(def (cddr x)
-    (cdr (cdr x)))
 
 ; REPLICATE creates a list containing n copies of val.
 
