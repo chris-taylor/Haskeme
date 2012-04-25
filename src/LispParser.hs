@@ -53,6 +53,8 @@ parseExpr = try parseComplex
         <|> try parseNumber
         <|> try parseBool
         <|> try parseChar
+        <|> parseFunction
+        <|> parseNegated
         <|> parseAtom
         <|> parseString
         <|> parseQuote
@@ -61,7 +63,6 @@ parseExpr = try parseComplex
         <|> parseUnquote
         <|> parseVector
         <|> parseHash
-        <|> parseFunction
         <|> parseList
 
 parseAtom :: Parser LispVal
@@ -155,6 +156,12 @@ parseFunction :: Parser LispVal
 parseFunction = do
     body <- brackets exprList
     return $ List [Atom "fn", List [Atom "_"], List body]
+
+parseNegated :: Parser LispVal
+parseNegated = do
+    char '~'
+    func <- parseAtom
+    return $ List [Atom "fn", List [Atom "_"], List [Atom "not", List [func, Atom "_"]]]
 
 -- Parsing helper functions
 
