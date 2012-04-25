@@ -82,6 +82,7 @@
 ;;;; Higher-order functions
 
 ; FOLDR and FOLDL perform left and right folds with an initial value
+; FOLDR1 and FOLDL1 use the car of the list as the initial value
 ; FOLD and REDUCE are synonyms for FOLDL
 
 (def (foldr func end lst)
@@ -94,9 +95,45 @@
         accum
         (foldl func (func accum (car lst)) (cdr lst))))
 
-(def fold foldl)
+(def (foldr1 func lst)
+    (foldr func (car lst) (cdr lst)))
 
+(def (foldl1 func lst)
+    (foldl func (car lst) (cdr lst)))
+
+(def fold foldl)
 (def reduce fold)
+
+(def fold1 foldl1)
+(def reduce1 fold1)
+
+; SCANR and SCANL perform as fold, but return a list of the intermediate results.
+; SCANR1 and SCANL1 use the car of the lst as the initial value
+; SCAN is a synonym for SCANL
+
+(def (scanr func end lst)
+    (if (null lst)
+        (list end)
+        (let result (scanr func end (cdr lst))
+            (cons (func (car lst) (car result))
+                  result))))
+
+(def (scanl func result lst)
+    (if (null lst)
+        (list result)
+        (cons result
+              (scanl func
+                     (func (car lst) result)
+                     (cdr lst)))))
+
+(def (scanr1 func lst)
+    (scanr func (car lst) (cdr lst)))
+
+(def (scanl1 func lst)
+    (scanl func (car lst) (cdr lst)))
+
+(def scan scanl)
+(def scan1 scanl1)
 
 ; UNFOLD takes an initial value and an argument, and keeps applying the function
 ; to previous result until the predicate is satisfied. It returns a list of
@@ -172,7 +209,7 @@
         (cons a (xrange (+ 1 a) b))))
 
 (def (range a . b)
-    (if (null b)
+    (if (no b)
         (xrange 0 a)
         (xrange a (car b))))
 
@@ -238,7 +275,7 @@
 ; corresponding VAL, and uses this environment to evaluate EXPR
 
 (macro (with bindings expr)
-    (if (null bindings)
+    (if (no bindings)
         expr
         `(apply
             (fn ()
@@ -251,10 +288,10 @@
 ; IN tests if its first argument is equal (in the sense of IS) to any if its
 ; later arguments
 
-(macro (in x . lst)
-    (if (null lst) #f
-        `(if (is ,x ,(car lst)) #t
-             (in ,x ,@(cdr lst)))))
+(macro (in x . elems)
+    (if (no elems) #f
+        `(if (is ,x ,(car elems)) #t
+             (in ,x ,@(cdr elems)))))
 
 ;;;; ASSIGNMENT
 
@@ -267,14 +304,12 @@
 ;   haskeme> m                  ==> #(a 1 b 3)
 
 (macro (++ x)
-    `(do
-        (= ,x (+ ,x 1))
-        ,x))
+    `(do (= ,x (+ ,x 1))
+         ,x))
 
 (macro (-- x)
-    `(do
-        (= ,x (- ,x 1))
-        ,x))
+    `(do (= ,x (- ,x 1))
+         ,x))
 
 ; ZAP modifies X to have the value obtained by applying func to X. Again, it
 ; can modify values inside structures.
