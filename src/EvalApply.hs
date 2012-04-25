@@ -116,7 +116,7 @@ evalDo env (expr : rest) = eval env expr >> evalDo env rest
 evalIf :: Env -> [LispVal] -> IOThrowsError LispVal
 evalIf env args@(test : rest) = do
     it <- eval env test
-    newEnv <- bindLocals env ("it", it)
+    newEnv <- bindOne env ("it", it)
     evalIf' newEnv (truthVal it) rest
 
 evalIf' :: Env -> Bool -> [LispVal] -> IOThrowsError LispVal
