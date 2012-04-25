@@ -203,45 +203,65 @@
         a
         (append (snoc (car b) a) (cdr b))))
 
-;;;; Macro definitions
+;;;; CONTROL FLOW
 
 ; WHEN executes a list of statements only if the test returns a non-false value
-; UNLESS executes the statements only if the test returns false
 
 (macro (when test . body)
     `(if ,test (do ,@body)))
 
+; UNLESS executes the statements only if the test returns false
+
 (macro (unless test . body)
     `(if (not ,test) (do ,@body)))
-
-; PUSH and POP treat a list as a stack, appending or removing elements from
-; the front. Note that because they are implemented using =, you get the
-; same flexibility as with =, so you can write:
-;   haskeme> (def x '(1 3 4)) ==> (1 3 4)
-;   haskeme> (push 2 (cdr x)) ==> 'ok
-;   haskeme> x                ==> (1 2 3 4)
-
-(macro (pop lst)
-    `(let res (car ,lst)
-        (do (= ,lst (cdr ,lst))
-            res)))
-
-(macro (push val lst)
-    `(do (= ,lst (cons ,val ,lst))
-         'ok))
 
 ; REPEAT executes a block of code n times, returning the final value
 
 (macro (repeat n block)
-    `(if (== ,n 1) ,block
+    `(if ,(== n 1) ,block
          (do ,block
-             (repeat (- ,n 1) ,block))))
+             (repeat ,(- n 1) ,block))))
 
-;;;; INCREMENT (++) and DECREMENT (--)
-; These modify their argument, and return the modified result
+;;;; LOCAL BINDINGS
 
-; As with PUSH and POP, these are implemented using =, so they can reach inside
-; structures. For example:
+; LET Creates a new temporay environment, within which VAR evaluates to VAL,
+; and uses this environment to evaluate EXPR.
+
+(macro (let var val expr)
+    `(apply
+        (fn ()
+            (def ,var ,val)
+            ,expr)
+        '()))
+
+; WITH Creates a new environment, within which each VAR evaluates to the
+; corresponding VAL, and uses this environment to evaluate EXPR
+
+(macro (with bindings expr)
+    (if (null bindings)
+        expr
+        `(apply
+            (fn ()
+                (def ,(car bindings) ,(cadr bindings))
+                (with ,(cddr bindings) ,expr))
+            '())))
+
+;;;; EQUALITY TESTING
+
+; IN tests if its first argument is equal (in the sense of IS) to any if its
+; later arguments
+
+(macro (in x . lst)
+    (if (null lst) #f
+        `(if (is ,x ,(car lst)) #t
+             (in ,x ,@(cdr lst)))))
+
+;;;; ASSIGNMENT
+
+; INCREMENT (++) and DECREMENT (--)
+; These modify their argument, and return the modified result.
+; As with PUSH and POP, ++ and -- are implemented using =, so they can reach
+; inside structures. For example:
 ;   haskeme> (def m #(a 1 b 2)) ==> #(a 1 b 2)
 ;   haskeme> (++ (m 'b))        ==> 3
 ;   haskeme> m                  ==> #(a 1 b 3)
@@ -256,7 +276,26 @@
         (= ,x (- ,x 1))
         ,x))
 
+; ZAP modifies X to have the value obtained by applying func to X. Again, it
+; can modify values inside structures.
+
 (macro (zap func x)
     `(let res (,func ,x)
         (do (= ,x res)
             res)))
+
+; PUSH and POP treat a list as a stack, appending or removing elements from
+; the front. Because they are implemented using =, you get the same
+; flexibility as with =, so you can write:
+;   haskeme> (def x '(1 3 4)) ==> (1 3 4)
+;   haskeme> (push 2 (cdr x)) ==> 'ok
+;   haskeme> x                ==> (1 2 3 4)
+
+(macro (pop lst)
+    `(let res (car ,lst)
+        (do (= ,lst (cdr ,lst))
+            res)))
+
+(macro (push val lst)
+    `(do (= ,lst (cons ,val ,lst))
+         'ok))
