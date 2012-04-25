@@ -263,6 +263,8 @@
 
 ; LET Creates a new temporay environment, within which VAR evaluates to VAL,
 ; and uses this environment to evaluate EXPR.
+; WITH Creates a new environment, within which each VAR evaluates to the
+; corresponding VAL, and uses this environment to evaluate EXPR
 
 (macro (let var val expr)
     `(apply
@@ -270,9 +272,6 @@
             (def ,var ,val)
             ,expr)
         '()))
-
-; WITH Creates a new environment, within which each VAR evaluates to the
-; corresponding VAL, and uses this environment to evaluate EXPR
 
 (macro (with bindings expr)
     (if (no bindings)
