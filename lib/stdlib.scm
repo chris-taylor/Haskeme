@@ -4,14 +4,14 @@
 (def (cadr x) (car (cdr x)))
 (def (cdar x) (cdr (car x)))
 (def (cddr x) (cdr (cdr x)))
-(def (caaar x)) (car (caar x))
-(def (caadr x)) (car (cadr x))
-(def (cadar x)) (car (cdar x))
-(def (caddr x)) (car (cddr x))
-(def (cdaar x)) (cdr (caar x))
-(def (cdadr x)) (cdr (cadr x))
-(def (cddar x)) (cdr (cdar x))
-(def (cdddr x)) (cdr (cddr x))
+(def (caaar x) (car (caar x)))
+(def (caadr x) (car (cadr x)))
+(def (cadar x) (car (cdar x)))
+(def (caddr x) (car (cddr x)))
+(def (cdaar x) (cdr (caar x)))
+(def (cdadr x) (cdr (cadr x)))
+(def (cddar x) (cdr (cdar x)))
+(def (cdddr x) (cdr (cddr x)))
 
 ; NIL returns the empty list
 
@@ -129,18 +129,6 @@
 (def (product . lst)
     (fold * 1 lst))
 
-; AND returns true if all its arguments are true, else it returns false
-; #TODO: this should short-circuit evaluation.
-
-(def (and . lst)
-    (fold && #t lst))
-
-; OR returns true if at least one of its arguments is true
-; #TODO: this should short-circuit evaluation.
-
-(def (or . lst)
-    (fold || #f lst))
-
 ; MAX and MIN return the maximum/minimum of their arguments.
 
 (def (max first . rest)
@@ -199,14 +187,26 @@
 ;;;; CONTROL FLOW
 
 ; WHEN executes a list of statements only if the test returns a non-false value
+; UNLESS executes the statements only if the test returns false
 
 (macro (when test . body)
     `(if ,test (do ,@body)))
 
-; UNLESS executes the statements only if the test returns false
-
 (macro (unless test . body)
     `(if (not ,test) (do ,@body)))
+
+; AND returns true if all its arguments are true, else it returns false
+; OR returns true if at least one of its arguments is true
+
+(macro (and . args)
+    (if (null args) #t
+        `(if ,(car args) (and ,@(cdr args))
+             #f)))
+
+(macro (or . args)
+    (if (null args) #f
+        `(if ,(car args) #t
+             (or ,@(cdr args)))))
 
 ; REPEAT executes a block of code n times, returning the final value
 
