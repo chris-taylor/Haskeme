@@ -17,14 +17,21 @@
 
 (def nil '())
 
-; NOT Unary negation
+; Various tests for negatives:
+; NO   returns true only for the empty list
+; NULL returns true for any empty data structure (list, string, vector, hash)
+; NOT  returns the boolean negation of its argument
+
+(def (no obj) (is obj nil))
+
+(def (null obj)
+    (or (is obj nil)
+        (is obj "")
+        (is obj $())
+        (is obj #())))
 
 (def (not x)
     (if x #f #t))
-
-; NULL returns true if the object is the empty list
-
-(def (null obj) (is obj nil))
 
 ; LIST returns a list containing all of its arguments
 
@@ -199,12 +206,12 @@
 ; OR returns true if at least one of its arguments is true
 
 (macro (and . args)
-    (if (null args) #t
+    (if (no args) #t
         `(if ,(car args) (and ,@(cdr args))
              #f)))
 
 (macro (or . args)
-    (if (null args) #f
+    (if (no args) #f
         `(if ,(car args) #t
              (or ,@(cdr args)))))
 
