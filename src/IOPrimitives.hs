@@ -2,6 +2,7 @@ module IOPrimitives (ioPrimitives) where
 
 import IO
 import Control.Monad.Error
+import System.Random
 
 import LispVal
 import LispParser
@@ -16,7 +17,8 @@ ioPrimitives = [ ("apply", applyProc)
                , ("read", readProc)
                , ("write", writeProc)
                , ("read-contents", readContents)
-               , ("read-all", readAll) ]
+               , ("read-all", readAll)
+               , ("random", rand) ]
 
 applyProc :: [LispVal] -> IOThrowsError LispVal
 applyProc [func, List args] = apply func args
@@ -43,3 +45,9 @@ readContents [String filename] = liftM String $ liftIO $ readFile filename
 readAll :: [LispVal] -> IOThrowsError LispVal
 readAll [String filename] = liftM List $ load filename
 
+rand :: [LispVal] -> IOThrowsError LispVal
+rand [modulus] = case modulus of
+    Number n -> liftM Number $ liftIO $ randomRIO (0, n - 1)
+    Float n  -> liftM Float $ liftIO $ randomRIO (0, n)
+    Ratio n  -> liftM (Ratio . toRational) $ liftIO $ randomRIO (0 , fromRational n :: Double)
+rand badArgs = throwError $ NumArgs 1 badArgs
