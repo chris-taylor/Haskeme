@@ -11,6 +11,8 @@ import IOPrimitives
 import Variables
 import EvalApply
 
+import Paths_haskeme
+
 -- Main
 
 main :: IO ()
@@ -25,7 +27,16 @@ runOne args = do
         >>= hPutStrLn stderr
 
 runRepl :: IO ()
-runRepl = showHeader >> primitiveBindings >>= untilM_ (== "quit") (readPrompt "haskeme> ") . evalAndPrint
+runRepl = do
+    showHeader
+    env <- primitiveBindings
+    loadLibraries env
+    untilM_ (== "quit") (readPrompt "haskeme> ") (evalAndPrint env)
+
+loadLibraries :: Env -> IO ()
+loadLibraries env = do
+    stdlib <- getDataFileName "stdlib.scm"
+    evalString env $ "(load  \"" ++ stdlib ++ "\" )"
 
 -- IO Functions
 
@@ -54,6 +65,9 @@ evalAndPrint :: Env -> String -> IO ()
 evalAndPrint env expr = if null expr
     then return ()
     else evalExpr env expr >>= putStrLn
+
+evalString :: Env -> String -> IO ()
+evalString env expr = evalExpr env expr >> return ()
 
 evalExpr :: Env -> String -> IO String
 evalExpr env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= eval env
