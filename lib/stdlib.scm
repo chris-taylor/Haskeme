@@ -71,12 +71,12 @@
 ; FOLD and REDUCE are synonyms for FOLDL
 
 (def (foldr func end lst)
-    (if (null? lst)
+    (if (null lst)
         end
         (func (car lst) (foldr func end (cdr lst)))))
 
 (def (foldl func accum lst)
-    (if (null? lst)
+    (if (null lst)
         accum
         (foldl func (func accum (car lst)) (cdr lst))))
 
@@ -98,20 +98,21 @@
 (def (map func lst)
     (foldr (fn (x y) (cons (func x) y)) '() lst))
 
-; KEEP returns a list containing only those elements of lst which satisfy
-; the given predicate.
+; KEEP returns a list containing only the elements that satisfy the predicate.
+; REMOVE returns a list without the elements that satisfy the given predicate.
 
 (def (keep pred lst)
-    (foldr (fn (x y)
-        (if (pred x)
-            (cons x y)
-            y)) '() lst))
+    (if (procedure? pred)
+        (foldr (fn (x y)
+            (if (pred x)
+                (cons x y)
+                y)) '() lst)
+        (keep [is _ pred] lst)))
 
-; DROP returns a list with all of the elements of lst that satisfy the given
-; predicate removed.
-
-(def (drop pred lst)
-    (keep [not (pred _)] lst))
+(def (remove pred lst)
+    (if (procedure? pred)
+        (keep ~pred lst)
+        (keep [not (is _ pred)] lst)))
 
 ; SUM and PRODUCT of a list of numbers.
 
@@ -183,7 +184,7 @@
         (cons a (xrange (+ 1 a) b))))
 
 (def (range a . b)
-    (if (null? b)
+    (if (null b)
         (xrange 0 a)
         (xrange a (car b))))
 
@@ -191,14 +192,14 @@
 ; rather than the start
 
 (def (snoc x lst)
-    (if (null? lst)
+    (if (null lst)
         (list x)
         (cons (car lst) (snoc x (cdr lst)))))
 
 ; APPEND appends the list, string or vector b to the end of a
 
 (def (append a b)
-    (if (null? b)
+    (if (null b)
         a
         (append (snoc (car b) a) (cdr b))))
 
