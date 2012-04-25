@@ -1,12 +1,16 @@
+; NIL returns the empty list
+
+(def nil '())
+
 ; NOT is unary negation of values
 
 (def (not x)
     (if x #f #t))
 
-; NULL? returns true if the object is the empty list
+; NULL returns true if the object is the empty list
 
-(def (null? obj)
-    (is obj '()))
+(def (null obj)
+    (is obj nil))
 
 ; LIST returns a list containing all of its arguments
 
@@ -28,7 +32,13 @@
 ; function of one argument.
 
 (def (curry func x)
-    (fn (y) (apply func (list x y))))
+    (fn y (apply func (cons x y))))
+
+; UNCURRY accepts a function that returns another function when given an
+; argument, and returns a function that can be called on all parameters at once.
+
+(def (uncurry func)
+    (fn (x . rest) (apply (func x) rest)))
 
 ; COMPOSE is function composition - the result is a function which applies g,
 ; then applies f.
@@ -40,19 +50,19 @@
 
 ; ZERO, POSITIVE, NEGATIVE, ODD and EVEN are self-explanatory.
 
-(def zero?
+(def zero
     (curry == 0))
 
-(def positive?
+(def positive
     (curry < 0))
 
-(def negative?
+(def negative
     (curry > 0))
 
-(def (odd? num)
+(def (odd num)
     (== (mod num 2) 1))
 
-(def (even? num)
+(def (even num)
     (== (mod num 2) 0))
 
 ;;;; Higher-order functions
@@ -205,19 +215,15 @@
 
 ; PUSH and POP treat a list as a stack, appending or removing elements from
 ; the front. Note that because they are implemented using =, you get the
-; same flexibility as with =, so you can do:
-;   haskeme> (def x '(1 3 4))
-;   (1 3 4)
-;   haskeme> (push 2 (cdr x))
-;   ok
-;   haskeme> x
-;   (1 2 3 4)
+; same flexibility as with =, so you can write:
+;   haskeme> (def x '(1 3 4)) ==> (1 3 4)
+;   haskeme> (push 2 (cdr x)) ==> 'ok
+;   haskeme> x                ==> (1 2 3 4)
 
 (macro (pop lst)
-    `(do
-        (def res (car ,lst))
-        (= ,lst (cdr ,lst))
-        res))
+    `(let res (car ,lst)
+        (do (= ,lst (cdr ,lst))
+            res)))
 
 (macro (push val lst)
     `(do (= ,lst (cons ,val ,lst))
@@ -229,3 +235,27 @@
     `(if (== ,n 1) ,block
          (do ,block
              (repeat (- ,n 1) ,block))))
+
+;;;; INCREMENT (++) and DECREMENT (--)
+; These modify their argument, and return the modified result
+
+; As with PUSH and POP, these are implemented using =, so they can reach inside
+; structures. For example:
+;   haskeme> (def m #(a 1 b 2)) ==> #(a 1 b 2)
+;   haskeme> (++ (m 'b))        ==> 3
+;   haskeme> m                  ==> #(a 1 b 3)
+
+(macro (++ x)
+    `(do
+        (= ,x (+ ,x 1))
+        ,x))
+
+(macro (-- x)
+    `(do
+        (= ,x (- ,x 1))
+        ,x))
+
+(macro (zap func x)
+    `(let res (,func ,x)
+        (do (= ,x res)
+            res)))
