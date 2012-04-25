@@ -23,8 +23,6 @@ eval env val@(Hash _)    = return val
 eval env (Atom name)     = getVar env name
 eval env (List [Atom "quote", val]) = return val
 eval env (List [Atom "quasiquote", val]) = evalQuasiquote 1 env val
-eval env (List [Atom "let", name, form, expr]) = evalLet env name form expr
-eval env (List [Atom "with", List bindings, expr]) = evalWith env bindings expr
 eval env (List (Atom "do" : exprs)) = evalDo env exprs
 eval env (List (Atom "if" : exprs)) = evalIf env exprs
 eval env (List (Atom "case" : key : clauses)) = evalCase env key clauses
@@ -110,33 +108,6 @@ evalLambda env (List params) body = makeNormalFunc env params body
 evalLambda env (DottedList params varargs) body = makeVarArgs varargs env params body
 evalLambda env varargs@(Atom _) body = makeVarArgs varargs env [] body
 
-evalLet :: Env -> LispVal -> LispVal -> LispVal -> IOThrowsError LispVal
-evalLet env var form expr = do
-    (name, val) <- analyseBinding env var form
-    newEnv <- bindLocals env (name, val)
-    eval newEnv expr
-
-evalWith :: Env -> [LispVal] -> LispVal -> IOThrowsError LispVal
-evalWith env []                  expr = eval env expr
-evalWith env (var : form : rest) expr = do
-    (name, val) <- analyseBinding env var form
-    newEnv <- bindLocals env (name, val)
-    evalWith newEnv rest expr
-
-analyseBinding :: Env -> LispVal -> LispVal -> IOThrowsError (String, LispVal)
-analyseBinding env (Atom var) form =
-    eval env form >>= named var
-analyseBinding env (List (Atom var : params)) body =
-    makeNormalFunc env params [body] >>= named var
-analyseBinding env (DottedList (Atom var : params) varargs) body =
-    makeVarArgs varargs env params [body] >>= named var
-
-named :: String -> LispVal -> IOThrowsError (String, LispVal)
-named name form = return (name, form)
-
-bindLocals :: Env -> (String, LispVal) -> IOThrowsError Env
-bindLocals env (var, val) = liftIO $ bindVars env [(var, val)]
-
 evalDo :: Env -> [LispVal] -> IOThrowsError LispVal
 evalDo env [] = throwError $ NumArgs 1 [List []]
 evalDo env [expr] = eval env expr
@@ -152,6 +123,9 @@ evalIf' :: Env -> Bool -> [LispVal] -> IOThrowsError LispVal
 evalIf' env truth [conseq]        = evalIf' env truth [conseq, Bool False]
 evalIf' env truth [conseq, alt]   = if truth then eval env conseq else eval env alt
 evalIf' env truth (conseq : rest) = if truth then eval env conseq else evalIf env rest
+
+bindOne :: Env -> (String, LispVal) -> IOThrowsError Env
+bindOne env (var, val) = liftIO $ bindVars env [(var, val)]
 
 evalCase :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalCase env key clauses = do
