@@ -39,8 +39,8 @@ data LispVal = Atom String
              | Char Char
              | String String
              | Bool Bool
-             | PrimitiveFunc ([LispVal] -> ThrowsError LispVal)
-             | IOFunc ([LispVal] -> IOThrowsError LispVal)
+             | PrimitiveFunc String ([LispVal] -> ThrowsError LispVal)
+             | IOFunc String ([LispVal] -> IOThrowsError LispVal)
              | Func { params :: [String], vararg :: Maybe String
                     , body :: [LispVal], closure :: Env }
              | Macro { macroParams :: [String], macroVararg :: Maybe String
@@ -64,8 +64,8 @@ showVal (List contents) = "(" ++ unwordsList contents ++ ")"
 showVal (DottedList hd tl) = "(" ++ unwordsList hd ++ " . " ++ showVal tl ++ ")"
 showVal (Vector arr) = "$(" ++ unwordsList (elems arr) ++ ")"
 showVal (Hash hash) = "#(" ++ unwordsList (unpairs $ zip (Map.keys hash) (Map.elems hash)) ++ ")"
-showVal (PrimitiveFunc _) = "<primitive>"
-showVal (IOFunc _) = "<IO primitive>"
+showVal (PrimitiveFunc name _) = "<primitive:" ++ name ++ ">"
+showVal (IOFunc name _) = "<ioPrimitive:" ++ name ++ ">"
 showVal (Func { params = args, vararg = varargs }) = showFunc "fn" args varargs
 showVal (Macro { macroParams = args, macroVararg = varargs }) = showFunc "macro" args varargs
 showVal (Port _) = "<IO port>"

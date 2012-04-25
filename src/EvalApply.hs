@@ -37,8 +37,8 @@ eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badFo
 -- Application
 
 apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
-apply (PrimitiveFunc func) args = liftThrows $ func args
-apply (IOFunc func) args = func args
+apply (PrimitiveFunc _ func) args = liftThrows $ func args
+apply (IOFunc _ func) args        = func args
 apply (Func  params varargs body closure) args = applyFunc params varargs body closure args
 apply (Macro params varargs body closure) args = applyFunc params varargs body closure args
 apply (String str) args = applyString str args

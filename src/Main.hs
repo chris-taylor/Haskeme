@@ -63,7 +63,7 @@ evalExpr env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= 
 primitiveBindings :: IO Env
 primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc IOFunc) ioPrimitives
                                               ++ map (makeFunc PrimitiveFunc) primitives)
-    where makeFunc constructor (var, func) = (var, constructor func)
+    where makeFunc constructor (var, func) = (var, constructor var func)
 
 -- Monadic looping
 

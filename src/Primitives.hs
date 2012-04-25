@@ -70,8 +70,8 @@ typeOf xs = case xs of
         t (Char _) = Atom "char"
         t (String _) = Atom "string"
         t (Bool _) = Atom "boolean"
-        t (PrimitiveFunc _) = Atom "procedure"
-        t (IOFunc _) = Atom "procedure"
+        t (PrimitiveFunc _ _) = Atom "procedure"
+        t (IOFunc _ _) = Atom "procedure"
         t (Func {}) = Atom "procedure"
         t (Macro {}) = Atom "macro"
         t (Port _) = Atom "port"
@@ -212,10 +212,10 @@ isHash (Hash _) = True
 isHash _        = False
 
 isProcedure :: LispVal -> Bool
-isProcedure (PrimitiveFunc _) = True
-isProcedure (IOFunc _)        = True
-isProcedure (Func _ _ _ _)    = True
-isProcedure _                 = False
+isProcedure (PrimitiveFunc _ _) = True
+isProcedure (IOFunc _ _)        = True
+isProcedure (Func _ _ _ _)      = True
+isProcedure _                   = False
 
 isMacro :: LispVal -> Bool
 isMacro (Macro _ _ _ _) = True
