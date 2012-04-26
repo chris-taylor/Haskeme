@@ -6,6 +6,8 @@ import Text.Parsec.Language
 import qualified Text.Parsec.Token as P
 import Numeric (readOct, readHex, readFloat)
 import Data.Array
+--import qualified Data.List as List
+import qualified Data.Tuple as Tuple
 import qualified Data.Map as Map
 import Ratio
 import Complex
@@ -55,7 +57,7 @@ parseExpr = try parseComplex
         <|> try parseChar
         <|> parseFunction
         <|> parseNegated
-        <|> parseAtom
+        <|> parseGenAtom
         <|> parseString
         <|> parseQuote
         <|> parseQuasiquote
@@ -67,6 +69,16 @@ parseExpr = try parseComplex
 
 parseAtom :: Parser LispVal
 parseAtom = identifier >>= return . Atom
+
+parseGenAtom :: Parser LispVal
+parseGenAtom = do
+    atom <- identifier
+    sep <- optionMaybe (oneOf ".")
+    case sep of
+        Nothing  -> return $ Atom atom
+        Just '.' -> do
+            next <- parseExpr
+            return $ List [Atom atom, next]
 
 parseString :: Parser LispVal
 parseString = stringLit >>= return . String
