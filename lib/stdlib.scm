@@ -37,9 +37,30 @@
 
 (def (list . objs) objs)
 
+(def (alist obj)
+    (or (is obj nil)
+        (is (type obj) 'pair)))
+
 ; ID is the identity function
 
 (def (id obj) obj)
+
+; COMPLEMENT returns the boolean complement of a function
+
+(def (complement f)
+    (fn args (not (apply f args))))
+
+; RFN Generates recursive lambdas by taking an additional parameter to use as
+; the name of the generated lambda.
+; AFN Works the same, but automatically binds the symbol `self to the lambda
+
+(macro (rfn name params . body)
+    `(let ,name nil
+        (= ,name (fn ,params ,@body))))
+
+(macro (afn params . body)
+    `(let self nil
+        (= self (fn ,params ,@body))))
 
 ; FLIP returns a function show arguments are flipped as compared to the input
 ; function
@@ -66,8 +87,6 @@
     (fn (x) (f (g x))))
 
 ;;;; Numeric functions
-
-; ZERO, POSITIVE, NEGATIVE, ODD and EVEN are self-explanatory.
 
 (def zero [== _ 0])
 
@@ -149,29 +168,31 @@
 (def (map func lst)
     (foldr (fn (x y) (cons (func x) y)) '() lst))
 
+; TESTIFY If given a function, return the function. Else return a function that
+; compares for equality with the argument
+
+(def (testify arg)
+    (if (procedure? arg) arg
+        (fn (x) (is x arg))))
+
 ; KEEP returns a list containing only the elements that satisfy the predicate.
 ; REMOVE returns a list without the elements that satisfy the given predicate.
 
 (def (keep pred lst)
-    (if (procedure? pred)
-        (foldr (fn (x y)
-            (if (pred x)
-                (cons x y)
-                y)) '() lst)
-        (keep [is _ pred] lst)))
+    (let test (testify pred)
+        (foldr
+            (fn (x y) (if (test x) (cons x y) y))
+            '()
+            lst)))
 
 (def (remove pred lst)
-    (if (procedure? pred)
-        (keep ~pred lst)
-        (keep [not (is _ pred)] lst)))
+    (keep (complement (testify pred)) lst))
 
 ; SUM and PRODUCT of a list of numbers.
 
-(def (sum . lst)
-    (fold + 0 lst))
+(def (sum . lst) (fold + 0 lst))
 
-(def (product . lst)
-    (fold * 1 lst))
+(def (product . lst) (fold * 1 lst))
 
 ; MAX and MIN return the maximum/minimum of their arguments.
 
@@ -252,35 +273,62 @@
         `(if ,(car args) #t
              (or ,@(cdr args)))))
 
+; LOOP Executes start, and then runs a recursive program that repeatedly
+; executes the body and the update step until the test is satisfied.
+
+(macro (loop start test update . body)
+    `(do ,start
+         ((afn (gparm)
+            (if gparm
+                (do ,@body ,update (self ,test))))
+          ,test)))
+
+; FOR binds the variable v to init, and on every step it increments v by 1 and
+; executes the body, until v exceeds max.
+
+(macro (for v init max . body)
+    `(with (,v nil gi ,init gm (+ ,max 1))
+        (loop (= ,v gi) (< ,v gm) (++ ,v)
+            ,@body)))
+
+(macro (forlen var s . body)
+    `(for ,var 0 (- (len ,s) 1) ,@body))
+
+; EACH binds the variable x to each element of xs, and executes the body.
+
+(def (walk seq func)
+    (if (alist seq)
+        ((afn (l)
+            (when (pair? l)
+                (func (car l))
+                (self (cdr l)))) seq)
+        ; else
+        (forlen i seq
+            (func (seq i)))))
+
+(macro (each x xs . body)
+    `(walk ,xs (fn (,x) ,@body)))
+
 ; REPEAT executes a block of code n times, returning the final value
 
-(macro (repeat n block)
-    `(if ,(== n 1) ,block
-         (do ,block
-             (repeat ,(- n 1) ,block))))
+(macro (repeat n . body)
+    `(for i 1 ,n ,@body))
 
 ;;;; LOCAL BINDINGS
 
-; LET Creates a new temporay environment, within which VAR evaluates to VAL,
-; and uses this environment to evaluate EXPR.
 ; WITH Creates a new environment, within which each VAR evaluates to the
 ; corresponding VAL, and uses this environment to evaluate EXPR
+; LET Short form of WITH that only binds one var, but doesn't need parentheses.
 
-(macro (let var val expr)
-    `(apply
-        (fn ()
-            (def ,var ,val)
-            ,expr)
-        '()))
-
-(macro (with bindings expr)
+(macro (with bindings . expr)
     (if (no bindings)
-        expr
-        `(apply
-            (fn ()
+        `(do ,@expr)
+        `((fn ()
                 (def ,(car bindings) ,(cadr bindings))
-                (with ,(cddr bindings) ,expr))
-            '())))
+                (with ,(cddr bindings) ,@expr)))))
+
+(macro (let var val . expr)
+    `(with (,var ,val) ,@expr))
 
 ;;;; EQUALITY TESTING
 
@@ -308,6 +356,7 @@
 ; inside structures.
 
 (macro (++ x) `(zap [+ _ 1] ,x))
+
 (macro (-- x) `(zap [- _ 1] ,x))
 
 ; PUSH and POP treat a list as a stack, appending or removing elements from
