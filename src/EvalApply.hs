@@ -31,6 +31,7 @@ eval env (List (Atom "load" : params)) = evalLoad env params
 eval env (List (Atom "def" : var : rest)) = evalDefine env var rest
 eval env (List (Atom "macro" : mac : rest)) = evalDefineMacro env mac rest
 eval env (List (Atom "fn" : params : body)) = evalLambda env params body
+eval env (List (Atom "uniq" : rest)) = genUniqueSym env rest
 eval env (List (function : args)) = evalApplication env function args
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
@@ -44,6 +45,7 @@ apply (Macro params varargs body closure) args = applyFunc params varargs body c
 apply (String str) args = applyString str args
 apply (Vector arr) args = applyVector arr args
 apply (Hash hash) args  = applyHash hash args
+apply other _ = throwError $ TypeMismatch "procedure, macro, string, vector or hash" other
 
 applyFunc :: [String] -> Maybe String -> [LispVal] -> Env -> [LispVal] -> IOThrowsError LispVal
 applyFunc params varargs body closure args = 
