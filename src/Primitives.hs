@@ -58,6 +58,7 @@ typeOf xs = case xs of
     xs  -> return $ List $ map t xs
     where
         t (Atom _) = Atom "symbol"
+        t (List []) = Atom "nil"
         t (List _) = Atom "pair"
         t (DottedList _ _) = Atom "pair"
         t (Vector _) = Atom "vector"
