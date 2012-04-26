@@ -55,9 +55,9 @@ parseExpr = try parseComplex
         <|> try parseNumber
         <|> try parseBool
         <|> try parseChar
+        <|> parseAtom
         <|> parseFunction
         <|> parseNegated
-        <|> parseGenAtom
         <|> parseString
         <|> parseQuote
         <|> parseQuasiquote
