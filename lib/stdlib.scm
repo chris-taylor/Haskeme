@@ -360,9 +360,9 @@
 ; later arguments
 
 (macro (in x . xs)
-    (if (no xs) #f
-        `(if (is ,x ,(car xs)) #t
-             (in ,x ,@(cdr xs)))))
+    (w/uniq g
+        `(let ,g ,x
+            (or ,@(map1 (fn (c) `(is ,g ,c)) xs)))))
 
 ;;;; ASSIGNMENT
 
