@@ -145,3 +145,20 @@ bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
     where extendEnv bindings env = liftM (++ env) (mapM addBinding bindings)
           addBinding (var, value) = do ref <- newIORef value
                                        return (var, ref)
+
+genUniqueSym :: Env -> [LispVal] -> IOThrowsError LispVal
+genUniqueSym envRef args = if null args
+    then genUniqueSym envRef [String ""]
+    else do
+        env <- liftIO $ readIORef envRef
+        sym <- genUniqueName env args
+        liftIO $ do
+            nullRef <- newIORef (List [])
+            writeIORef envRef $ (sym, nullRef) : env
+        return $ Atom sym
+
+genUniqueName :: [a] -> [LispVal] -> IOThrowsError String
+genUniqueName env args = case args of
+    [String name] -> return $ "#:" ++ name ++ show (1 + length env)
+    [notString]   -> throwError $ TypeMismatch "string" notString
+    badArgs       -> throwError $ NumArgs 1 badArgs
