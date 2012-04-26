@@ -163,10 +163,26 @@
         (cons init '())
         (cons init (unfold func (func init) pred))))
 
-; MAP applies a function to all of the elements of a list.
+; MAP1 applies a unary function to each element of xs
 
-(def (map func lst)
-    (foldr (fn (x y) (cons (func x) y)) '() lst))
+(def (map1 func xs)
+    (if (no xs)
+        '()
+        (cons (func (car xs)) (map1 func (cdr xs)))))
+
+(def (pair xs)
+    (if (no xs)
+            nil
+        (no (cdr xs)) 
+            (list (list (car xs)))
+        (cons (list (car xs) (cadr xs))
+              (pair (cddr xs)))))
+
+; MAP applies a function to each element of xs
+; #TODO make this accept multivalent functions
+
+(def (map func xs)
+    (foldr (fn (x y) (cons (func x) y)) '() xs))
 
 ; TESTIFY If given a function, return the function. Else return a function that
 ; compares for equality with the argument
@@ -249,6 +265,9 @@
         a
         (append (snoc (car b) a) (cdr b))))
 
+(def (join . args)
+    (foldr append '() args))
+
 ;;;; CONTROL FLOW
 
 ; WHEN executes a list of statements only if the test returns a non-false value
@@ -320,25 +339,30 @@
 ; corresponding VAL, and uses this environment to evaluate EXPR
 ; LET Short form of WITH that only binds one var, but doesn't need parentheses.
 
-(macro (with bindings . expr)
-    (if (no bindings)
-        `(do ,@expr)
-        `((fn ()
-                (def ,(car bindings) ,(cadr bindings))
-                (with ,(cddr bindings) ,@expr)))))
+(macro (with bindings . body)
+    `((fn ,(map1 car (pair bindings))
+          ,@body)
+        ,@(map1 cadr (pair bindings))))
 
-(macro (let var val . expr)
-    `(with (,var ,val) ,@expr))
+(macro (let var val . body)
+    `(with (,var ,val) ,@body))
+
+(macro (w/uniq params . body)
+    (if (pair? params)
+        `(with ,(apply join (map (fn (n) (list n '(uniq)))
+                                params))
+            ,@body)
+        `(let ,params (uniq) ,@body)))
 
 ;;;; EQUALITY TESTING
 
 ; IN tests if its first argument is equal (in the sense of IS) to any if its
 ; later arguments
 
-(macro (in x . elems)
-    (if (no elems) #f
-        `(if (is ,x ,(car elems)) #t
-             (in ,x ,@(cdr elems)))))
+(macro (in x . xs)
+    (if (no xs) #f
+        `(if (is ,x ,(car xs)) #t
+             (in ,x ,@(cdr xs)))))
 
 ;;;; ASSIGNMENT
 
@@ -346,9 +370,10 @@
 ; can modify values inside structures.
 
 (macro (zap func x)
-    `(let res (,func ,x)
-        (do (= ,x res)
-            res)))
+    (w/uniq result
+        `(let ,result (,func ,x)
+            (do (= ,x ,result)
+                ,result))))
 
 ; INCREMENT (++) and DECREMENT (--)
 ; These modify their argument, and return the modified result.
@@ -367,9 +392,10 @@
 ;   haskeme> x                ==> (1 2 3 4)
 
 (macro (pop lst)
-    `(let res (car ,lst)
-        (do (= ,lst (cdr ,lst))
-            res)))
+    (w/uniq elem)
+        `(let ,elem (car ,lst)
+            (do (= ,lst (cdr ,lst))
+                ,elem)))
 
 (macro (push val lst)
     `(do (= ,lst (cons ,val ,lst))
