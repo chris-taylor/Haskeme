@@ -294,22 +294,6 @@
 
 ;;;; ASSIGNMENT
 
-; INCREMENT (++) and DECREMENT (--)
-; These modify their argument, and return the modified result.
-; As with PUSH and POP, ++ and -- are implemented using =, so they can reach
-; inside structures. For example:
-;   haskeme> (def m #(a 1 b 2)) ==> #(a 1 b 2)
-;   haskeme> (++ (m 'b))        ==> 3
-;   haskeme> m                  ==> #(a 1 b 3)
-
-(macro (++ x)
-    `(do (= ,x (+ ,x 1))
-         ,x))
-
-(macro (-- x)
-    `(do (= ,x (- ,x 1))
-         ,x))
-
 ; ZAP modifies X to have the value obtained by applying func to X. Again, it
 ; can modify values inside structures.
 
@@ -317,6 +301,14 @@
     `(let res (,func ,x)
         (do (= ,x res)
             res)))
+
+; INCREMENT (++) and DECREMENT (--)
+; These modify their argument, and return the modified result.
+; As with PUSH and POP, ++ and -- are implemented using =, so they can reach
+; inside structures.
+
+(macro (++ x) `(zap [+ _ 1] ,x))
+(macro (-- x) `(zap [- _ 1] ,x))
 
 ; PUSH and POP treat a list as a stack, appending or removing elements from
 ; the front. Because they are implemented using =, you get the same
