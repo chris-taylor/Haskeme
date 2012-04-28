@@ -206,9 +206,9 @@
 
 ; SUM and PRODUCT of a list of numbers.
 
-(def (sum . lst) (fold + 0 lst))
+(def (sum lst) (fold + 0 lst))
 
-(def (product . lst) (fold * 1 lst))
+(def (product lst) (fold * 1 lst))
 
 ; MAX and MIN return the maximum/minimum of their arguments.
 

@@ -41,6 +41,8 @@ primitives = numericPrimitives ++
              , ("keys", unaryOp keys)
              , ("vals", unaryOp vals)
              , ("len", len)
+             , ("string->list", typeTrans stringToList)
+             , ("list->string", typeTrans listToString)
              , ("symbol->string", typeTrans symbolToString)
              , ("string->symbol", typeTrans stringToSymbol)
              , ("vector->list", typeTrans vectorToList)
@@ -228,6 +230,17 @@ isPort _        = False
 typeTrans :: (LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
 typeTrans f [x]  = f x
 typeTrans f args = throwError $ NumArgs 1 args
+
+listToString :: LispVal -> ThrowsError LispVal
+listToString (List xs) = liftM String $ stringify xs where
+    stringify []              = return ""
+    stringify (Char c : rest) = liftM (c:) $ stringify rest
+    stringify (other : rest)  = throwError $ TypeMismatch "char" other
+listToString notList   = throwError $ TypeMismatch "list" notList
+
+stringToList :: LispVal -> ThrowsError LispVal
+stringToList (String cs) = return $ List (map Char cs)
+stringToList notString   = throwError $ TypeMismatch "string" notString
 
 symbolToString :: LispVal -> ThrowsError LispVal
 symbolToString (Atom val) = return $ String val

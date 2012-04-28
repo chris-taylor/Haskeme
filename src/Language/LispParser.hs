@@ -7,7 +7,7 @@ import qualified Text.Parsec.Token as P
 import Numeric (readOct, readHex, readFloat)
 import Data.Array
 --import qualified Data.List as List
-import qualified Data.Tuple as Tuple
+--import qualified Data.Tuple as Tuple
 import qualified Data.Map as Map
 import Ratio
 import Complex
