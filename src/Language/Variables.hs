@@ -8,29 +8,43 @@ import Control.Monad.Error
 import Language.LispVal
 
 nullEnv :: IO Env
-nullEnv = newIORef []
+nullEnv = newIORef Map.empty
 
 isBound :: Env -> String -> IO Bool
-isBound envRef var = readIORef envRef >>= return . maybe False (const True) . lookup var
+isBound envRef var = readIORef envRef >>= return . maybe False (const True) . Map.lookup var
 
 getVar :: Env -> String -> IOThrowsError LispVal
 getVar envRef var = do
     env <- liftIO $ readIORef envRef
     maybe (throwError $ UnboundVar "Getting an unbound variable" var)
           (liftIO . readIORef)
-          (lookup var env)
+          (Map.lookup var env)
 
 setVar :: Env -> String -> LispVal -> IOThrowsError LispVal
 setVar envRef var val = do
     env <- liftIO $ readIORef envRef
     maybe (throwError $ UnboundVar "Setting an unbound variable" var)
           (liftIO . (flip writeIORef val))
-          (lookup var env)
+          (Map.lookup var env)
     return val
+    
+defineVar :: Env -> String -> LispVal -> IOThrowsError LispVal
+defineVar envRef var value = do
+    alreadyDefined <- liftIO $ isBound envRef var
+    if alreadyDefined
+        then setVar envRef var value
+        else liftIO $ do
+            valueRef <- newIORef value
+            env <- readIORef envRef
+            writeIORef envRef $ Map.insert var valueRef env
+            return value
 
-replace :: Integer -> [a] -> a -> [a]
-replace n lst val = xs ++ val:ys where
-    (xs, _:ys) = splitAt (fromInteger n) lst
+bindVars :: Env -> [(String,LispVal)] -> IO Env
+bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
+    where extendEnv bindings env = liftM (Map.union env) newBindings
+          newBindings = liftM Map.fromList $ mapM addBinding bindings
+          addBinding (var, value) = do ref <- newIORef value
+                                       return (var, ref)
 
 setCar :: Env -> String -> LispVal -> IOThrowsError LispVal
 setCar envRef var val = do
@@ -44,7 +58,7 @@ setCar envRef var val = do
                 Vector arr              -> setVectorCar varRef val arr
                 String (_ : cdr)        -> setStringCar varRef val cdr
                 other    -> throwError $ TypeMismatch "pair, vector or string" other)
-          (lookup var env)
+          (Map.lookup var env)
     return val
 
 setListCar :: IORef LispVal -> LispVal -> [LispVal] -> IOThrowsError ()
@@ -75,7 +89,7 @@ setCdr envRef var val = do
                 Vector arr              -> setVectorCdr varRef car val where car = arr ! 0
                 String (car : _)        -> setStringCdr varRef car val
                 notPair -> throwError $ TypeMismatch "pair, vector or string" notPair)
-          (lookup var env)
+          (Map.lookup var env)
     return val
 
 setListCdr :: IORef LispVal -> LispVal -> LispVal -> IOThrowsError ()
@@ -111,15 +125,19 @@ setIndex envRef var index val = do
                 Vector arr -> setVectorIndex varRef arr index val
                 Hash hash  -> setHashKey varRef hash index val
                 other -> throwError $ TypeMismatch "string, vector or hash" other)
-          (lookup var env)
+          (Map.lookup var env)
     return val
 
 setStringIndex :: IORef LispVal -> String -> LispVal -> LispVal -> IOThrowsError ()
 setStringIndex varRef str index val = case index of
     Number n -> case val of
-        Char c  -> liftIO $ writeIORef varRef (String $ replace n str c)
+        Char c  -> liftIO $ writeIORef varRef (String $ replaceAt n str c)
         notChar -> throwError $ TypeMismatch "char" notChar
     notInt   -> throwError $ TypeMismatch "integer" notInt
+
+replaceAt :: Integer -> [a] -> a -> [a]
+replaceAt n lst val = xs ++ val:ys where
+    (xs, _:ys) = splitAt (fromInteger n) lst
 
 setVectorIndex :: IORef LispVal -> VectorType -> LispVal -> LispVal -> IOThrowsError ()
 setVectorIndex varRef arr index val = case index of
@@ -129,23 +147,6 @@ setVectorIndex varRef arr index val = case index of
 setHashKey :: IORef LispVal -> HashType -> LispVal -> LispVal -> IOThrowsError ()
 setHashKey varRef hash key val = liftIO $ writeIORef varRef (Hash $ Map.insert key val hash)
 
-defineVar :: Env -> String -> LispVal -> IOThrowsError LispVal
-defineVar envRef var value = do
-    alreadyDefined <- liftIO $ isBound envRef var
-    if alreadyDefined
-        then setVar envRef var value
-        else liftIO $ do
-            valueRef <- newIORef value
-            env <- readIORef envRef
-            writeIORef envRef ((var, valueRef) : env)
-            return value
-
-bindVars :: Env -> [(String,LispVal)] -> IO Env
-bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
-    where extendEnv bindings env = liftM (++ env) (mapM addBinding bindings)
-          addBinding (var, value) = do ref <- newIORef value
-                                       return (var, ref)
-
 genUniqueSym :: Env -> [LispVal] -> IOThrowsError LispVal
 genUniqueSym envRef args = if null args
     then genUniqueSym envRef [String ""]
@@ -154,11 +155,13 @@ genUniqueSym envRef args = if null args
         sym <- genUniqueName env args
         liftIO $ do
             nullRef <- newIORef (List [])
-            writeIORef envRef $ (sym, nullRef) : env
+            writeIORef envRef $ Map.insert sym nullRef env
         return $ Atom sym
 
-genUniqueName :: [a] -> [LispVal] -> IOThrowsError String
+genUniqueName :: EnvType -> [LispVal] -> IOThrowsError String
 genUniqueName env args = case args of
-    [String name] -> return $ "#:" ++ name ++ show (1 + length env)
+    [String name] -> return $ "#:" ++ name ++ show (1 + Map.size env)
     [notString]   -> throwError $ TypeMismatch "string" notString
     badArgs       -> throwError $ NumArgs 1 badArgs
+
+
