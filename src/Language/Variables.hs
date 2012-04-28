@@ -10,47 +10,62 @@ import Language.LispVal
 nullEnv :: IO Env
 nullEnv = newIORef Map.empty
 
-varNamespace :: String
 varNamespace = "v"
-
-macroNamespace :: String
 macroNamespace = "m"
 
-varLookup :: String -> EnvType -> Maybe (IORef LispVal)
-varLookup var env = Map.lookup (varNamespace, var) env
+envLookup :: Namespace -> Var -> EnvType -> Maybe (IORef LispVal)
+envLookup namespace var env = Map.lookup (namespace, var) env
 
-varInsert :: String -> IORef LispVal -> EnvType -> EnvType
-varInsert var val env = Map.insert (varNamespace, var) val env
+varLookup = envLookup varNamespace
+macroLookup = envLookup macroNamespace 
 
-isBound :: Env -> String -> IO Bool
-isBound envRef var = readIORef envRef >>=
-    return . maybe False (const True) . varLookup var
+envInsert :: Namespace -> Var -> IORef LispVal -> EnvType -> EnvType
+envInsert namespace var val env = Map.insert (namespace, var) val env
 
-getVar :: Env -> String -> IOThrowsError LispVal
-getVar envRef var = do
+varInsert = envInsert varNamespace
+macroInsert = envInsert macroNamespace
+
+isBound :: Namespace -> Var -> Env -> IO Bool
+isBound namespace var envRef = readIORef envRef >>=
+    return . maybe False (const True) . envLookup namespace var
+
+varIsBound = isBound varNamespace
+macroIsBound = isBound macroNamespace
+
+get :: Namespace -> Env -> Var -> IOThrowsError LispVal
+get namespace envRef var = do
     env <- liftIO $ readIORef envRef
     maybe (throwError $ UnboundVar "Getting an unbound variable" var)
           (liftIO . readIORef)
-          (varLookup var env)
+          (envLookup namespace var env)
 
-setVar :: Env -> String -> LispVal -> IOThrowsError LispVal
-setVar envRef var val = do
+getVar = get varNamespace
+getMacro = get macroNamespace
+
+set :: Namespace -> Env -> String -> LispVal -> IOThrowsError LispVal
+set namespace envRef var val = do
     env <- liftIO $ readIORef envRef
     maybe (throwError $ UnboundVar "Setting an unbound variable" var)
           (liftIO . (flip writeIORef val))
-          (varLookup var env)
+          (envLookup namespace var env)
     return val
 
-defineVar :: Env -> String -> LispVal -> IOThrowsError LispVal
-defineVar envRef var value = do
-    alreadyDefined <- liftIO $ isBound envRef var
+setVar = set varNamespace
+setMacro = set macroNamespace
+
+define :: Namespace -> Env -> String -> LispVal -> IOThrowsError LispVal
+define namespace envRef var value = do
+    alreadyDefined <- liftIO $ isBound namespace var envRef
     if alreadyDefined
-        then setVar envRef var value
+        then set namespace envRef var value
         else liftIO $ do
             valueRef <- newIORef value
             env <- readIORef envRef
-            writeIORef envRef $ varInsert var valueRef env
+            writeIORef envRef $ envInsert namespace var valueRef env
             return value
+
+defineVar = define varNamespace
+defineMacro = define macroNamespace
 
 bindVars :: Env -> [(String,LispVal)] -> IO Env
 bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef

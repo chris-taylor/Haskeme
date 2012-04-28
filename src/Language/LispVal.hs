@@ -7,6 +7,8 @@ module Language.LispVal (
     , HashType
     , EnvType
     , Env
+    , Namespace
+    , Var
     , ThrowsError
     , IOThrowsError
     , showVal, nil, eqv, unwordsList, pairs, unpairs
@@ -23,11 +25,14 @@ import Complex
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec (ParseError)
 
-type EnvType = Map.Map (String, String) (IORef LispVal)
-type Env = IORef EnvType
+type Namespace = String
+type Var = String
 
+type EnvType = Map.Map (Namespace, Var) (IORef LispVal)
 type VectorType = Array Int LispVal
 type HashType = Map.Map LispVal LispVal
+
+type Env = IORef EnvType
 
 data LispVal = Atom String
              | List [LispVal]
