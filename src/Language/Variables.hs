@@ -10,24 +10,37 @@ import Language.LispVal
 nullEnv :: IO Env
 nullEnv = newIORef Map.empty
 
+varNamespace :: String
+varNamespace = "v"
+
+macroNamespace :: String
+macroNamespace = "m"
+
+varLookup :: String -> EnvType -> Maybe (IORef LispVal)
+varLookup var env = Map.lookup (varNamespace, var) env
+
+varInsert :: String -> IORef LispVal -> EnvType -> EnvType
+varInsert var val env = Map.insert (varNamespace, var) val env
+
 isBound :: Env -> String -> IO Bool
-isBound envRef var = readIORef envRef >>= return . maybe False (const True) . Map.lookup var
+isBound envRef var = readIORef envRef >>=
+    return . maybe False (const True) . varLookup var
 
 getVar :: Env -> String -> IOThrowsError LispVal
 getVar envRef var = do
     env <- liftIO $ readIORef envRef
     maybe (throwError $ UnboundVar "Getting an unbound variable" var)
           (liftIO . readIORef)
-          (Map.lookup var env)
+          (varLookup var env)
 
 setVar :: Env -> String -> LispVal -> IOThrowsError LispVal
 setVar envRef var val = do
     env <- liftIO $ readIORef envRef
     maybe (throwError $ UnboundVar "Setting an unbound variable" var)
           (liftIO . (flip writeIORef val))
-          (Map.lookup var env)
+          (varLookup var env)
     return val
-    
+
 defineVar :: Env -> String -> LispVal -> IOThrowsError LispVal
 defineVar envRef var value = do
     alreadyDefined <- liftIO $ isBound envRef var
@@ -36,7 +49,7 @@ defineVar envRef var value = do
         else liftIO $ do
             valueRef <- newIORef value
             env <- readIORef envRef
-            writeIORef envRef $ Map.insert var valueRef env
+            writeIORef envRef $ varInsert var valueRef env
             return value
 
 bindVars :: Env -> [(String,LispVal)] -> IO Env
@@ -44,7 +57,7 @@ bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
     where extendEnv bindings env = liftM (Map.union env) newBindings
           newBindings = liftM Map.fromList $ mapM addBinding bindings
           addBinding (var, value) = do ref <- newIORef value
-                                       return (var, ref)
+                                       return ((varNamespace, var), ref)
 
 setCar :: Env -> String -> LispVal -> IOThrowsError LispVal
 setCar envRef var val = do
@@ -58,7 +71,7 @@ setCar envRef var val = do
                 Vector arr              -> setVectorCar varRef val arr
                 String (_ : cdr)        -> setStringCar varRef val cdr
                 other    -> throwError $ TypeMismatch "pair, vector or string" other)
-          (Map.lookup var env)
+          (varLookup var env)
     return val
 
 setListCar :: IORef LispVal -> LispVal -> [LispVal] -> IOThrowsError ()
@@ -89,7 +102,7 @@ setCdr envRef var val = do
                 Vector arr              -> setVectorCdr varRef car val where car = arr ! 0
                 String (car : _)        -> setStringCdr varRef car val
                 notPair -> throwError $ TypeMismatch "pair, vector or string" notPair)
-          (Map.lookup var env)
+          (varLookup var env)
     return val
 
 setListCdr :: IORef LispVal -> LispVal -> LispVal -> IOThrowsError ()
@@ -125,7 +138,7 @@ setIndex envRef var index val = do
                 Vector arr -> setVectorIndex varRef arr index val
                 Hash hash  -> setHashKey varRef hash index val
                 other -> throwError $ TypeMismatch "string, vector or hash" other)
-          (Map.lookup var env)
+          (varLookup var env)
     return val
 
 setStringIndex :: IORef LispVal -> String -> LispVal -> LispVal -> IOThrowsError ()
@@ -155,7 +168,7 @@ genUniqueSym envRef args = if null args
         sym <- genUniqueName env args
         liftIO $ do
             nullRef <- newIORef (List [])
-            writeIORef envRef $ Map.insert sym nullRef env
+            writeIORef envRef $ varInsert sym nullRef env
         return $ Atom sym
 
 genUniqueName :: EnvType -> [LispVal] -> IOThrowsError String

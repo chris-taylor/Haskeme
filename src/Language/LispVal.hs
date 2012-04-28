@@ -23,7 +23,7 @@ import Complex
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec (ParseError)
 
-type EnvType = Map.Map String (IORef LispVal)
+type EnvType = Map.Map (String, String) (IORef LispVal)
 type Env = IORef EnvType
 
 type VectorType = Array Int LispVal
