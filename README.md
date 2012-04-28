@@ -45,7 +45,6 @@ I've also borrowed some ideas from Arc and Q:
 * Tail call optimization
 * Separate macro compilation phase
 * Compiler
-* Build system
 * Random numbers
 * Continuations
 * Stream data type
