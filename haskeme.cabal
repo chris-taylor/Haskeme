@@ -25,12 +25,16 @@ Library
     Build-Depends:      base >= 2, parsec, mtl, haskell98, containers, array, random
     Extensions:         ExistentialQuantification
     Hs-Source-Dirs:     src
-    Exposed-Modules:    LispVal, Variables, EvalApply,
---  Other-Modules:      
-                        LispNum, LispParser, IOPrimitives, Primitives
+    Exposed-Modules:    Language.LispVal
+                        Language.Variables
+                        Language.EvalApply
+                        Language.LispNum
+                        Language.LispParser
+                        Language.IOPrimitives
+                        Language.Primitives
 
 Executable          haski
     Build-Depends:  haskeme, base, parsec, mtl, haskell98, containers, array, random
     Extensions:     ExistentialQuantification
     Main-is:        Main.hs
-    Hs-Source-Dirs: src
+    Hs-Source-Dirs: src/Interpreter
