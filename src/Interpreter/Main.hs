@@ -37,7 +37,7 @@ loadLibraries :: Env -> IO ()
 loadLibraries env = do
     stdlib <- getDataFileName "lib/stdlib.scm"
     putStrLn $ "Loading library from " ++ stdlib
-    evalString env $ "(load  \"" ++ (escapeBackslashes stdlib) ++ "\" )"
+    evalString env $ "(load  \"" ++ (escapeBackslashes stdlib) ++ "\")"
 
 -- IO Functions
 
@@ -71,7 +71,8 @@ evalString :: Env -> String -> IO ()
 evalString env expr = evalExpr env expr >> return ()
 
 evalExpr :: Env -> String -> IO String
-evalExpr env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= eval env
+evalExpr env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>=
+    macroExpand env >>= eval env
 
 -- Environments
 
@@ -90,11 +91,11 @@ untilM_ predicate prompt action = do
         else action result >> untilM_ predicate prompt action
 
 escapeBackslashes :: String -> String
-escapeBackslashes str = replace' str "\\" "\\\\"
+escapeBackslashes str = replace str "\\" "\\\\"
 
-replace' :: Eq a => [a] -> [a] -> [a] -> [a]
-replace' [] _ _ = []
-replace' s find repl =
+replace :: Eq a => [a] -> [a] -> [a] -> [a]
+replace [] _ _ = []
+replace s find repl =
     if take (length find) s == find
-        then repl ++ (replace' (drop (length find) s) find repl)
-        else [head s] ++ (replace' (tail s) find repl)
+        then repl ++ (replace (drop (length find) s) find repl)
+        else [head s] ++ (replace (tail s) find repl)

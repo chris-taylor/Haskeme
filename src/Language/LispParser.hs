@@ -6,8 +6,6 @@ import Text.Parsec.Language
 import qualified Text.Parsec.Token as P
 import Numeric (readOct, readHex, readFloat)
 import Data.Array
---import qualified Data.List as List
---import qualified Data.Tuple as Tuple
 import qualified Data.Map as Map
 import Ratio
 import Complex
@@ -48,6 +46,9 @@ readOrThrow parser input = case parse parser "lisp" input of
     Left err -> throwError $ Parser err
     Right val -> return val
 
+exprList :: Parser [LispVal]
+exprList = whiteSpace >> many (lexeme parseExpr)
+
 parseExpr :: Parser LispVal
 parseExpr = try parseComplex
         <|> try parseFloat
@@ -55,9 +56,9 @@ parseExpr = try parseComplex
         <|> try parseNumber
         <|> try parseBool
         <|> try parseChar
-        <|> parseAtom
         <|> parseFunction
         <|> parseNegated
+        <|> parseAtom
         <|> parseString
         <|> parseQuote
         <|> parseQuasiquote
@@ -173,7 +174,8 @@ parseNegated :: Parser LispVal
 parseNegated = do
     char '~'
     func <- parseAtom
-    return $ List [Atom "fn", List [Atom "_"], List [Atom "not", List [func, Atom "_"]]]
+    return $ List [Atom "complement", func]
+    --return $ List [Atom "fn", List [Atom "_"], List [Atom "not", List [func, Atom "_"]]]
 
 -- Parsing helper functions
 
@@ -182,9 +184,6 @@ symbol = oneOf "!%&|*+-/:<=>?@^_~"
 
 spaces1 :: Parser ()
 spaces1 = skipMany1 space
-
-exprList :: Parser [LispVal]
-exprList = whiteSpace >> many (lexeme parseExpr)
 
 rational :: Parser Rational
 rational = do

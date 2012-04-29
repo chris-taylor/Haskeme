@@ -67,12 +67,21 @@ define namespace envRef var value = do
 defineVar = define varNamespace
 defineMacro = define macroNamespace
 
+extendEnv :: [ (Var, LispVal) ] -> Env -> IO Env
+extendEnv [] envRef               = return envRef
+extendEnv (binding : rest) envRef = addBinding envRef binding >>= extendEnv rest
+    where addBinding envRef (var, value) = do
+            env <- readIORef envRef
+            ref <- newIORef value
+            newIORef $ Map.insert ("v", var) ref env
+
 bindVars :: Env -> [(String,LispVal)] -> IO Env
-bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
-    where extendEnv bindings env = liftM (Map.union env) newBindings
-          newBindings = liftM Map.fromList $ mapM addBinding bindings
-          addBinding (var, value) = do ref <- newIORef value
-                                       return ((varNamespace, var), ref)
+bindVars = flip extendEnv
+--bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
+--    where extendEnv bindings env = liftM (Map.union env) newBindings
+--          newBindings = liftM Map.fromList $ mapM addBinding bindings
+--          addBinding (var, value) = do ref <- newIORef value
+--                                       return ((varNamespace, var), ref)
 
 setCar :: Env -> String -> LispVal -> IOThrowsError LispVal
 setCar envRef var val = do
@@ -192,4 +201,15 @@ genUniqueName env args = case args of
     [notString]   -> throwError $ TypeMismatch "string" notString
     badArgs       -> throwError $ NumArgs 1 badArgs
 
+-- Debugging
 
+showNamespace :: Namespace -> Env -> IOThrowsError LispVal
+showNamespace name envRef = do
+    env <- liftIO $ readIORef envRef
+    let namespace = filter (\((n,_),_) -> n == name) (Map.toList env)
+    forM_ namespace printVar
+    return $ List []
+    where
+        printVar ((_,var),valRef) = do
+            val <- liftIO $ readIORef valRef
+            liftIO $ putStrLn (var ++ " : " ++ show val)

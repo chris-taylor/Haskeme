@@ -11,7 +11,7 @@ module Language.LispVal (
     , Var
     , ThrowsError
     , IOThrowsError
-    , showVal, nil, eqv, unwordsList, pairs, unpairs
+    , showVal, nil, eqv, unwordsList, pairs, unpairs, truthVal
     , makeNormalFunc, makeVarArgs, makeNormalMacro, makeVarArgsMacro
     , trapError, extractValue, liftThrows, runIOThrows
     ) where
@@ -180,6 +180,19 @@ instance Show ([LispVal] -> ThrowsError LispVal) where
 
 instance Show ([LispVal] -> IOThrowsError LispVal) where
     show _ = "<ioPrimitive>"
+
+-- Truth values (used in 'if special form)
+
+truthVal :: LispVal -> Bool
+truthVal (Bool False) = False
+truthVal (Number 0)   = False
+truthVal (Ratio 0)    = False
+truthVal (Float 0)    = False
+truthVal (Complex 0)  = False
+truthVal (String "")  = False
+truthVal (List [])    = False
+truthVal (Vector arr) = let (_, n) = bounds arr in n > 0
+truthVal _            = True
     
 -- Equivalance of LispVals (for use as keys in a hash)
 

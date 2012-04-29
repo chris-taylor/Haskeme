@@ -45,7 +45,8 @@
 
 (def (id obj) obj)
 
-; COMPLEMENT returns the boolean complement of a function
+; COMPLEMENT returns the boolean complement of a function.
+; The syntax ~func is desugared into (complement func)
 
 (def (complement f)
     (fn args (not (apply f args))))
@@ -392,10 +393,10 @@
 ;   haskeme> x                ==> (1 2 3 4)
 
 (macro (pop lst)
-    (w/uniq elem)
+    (w/uniq elem
         `(let ,elem (car ,lst)
             (do (= ,lst (cdr ,lst))
-                ,elem)))
+                ,elem))))
 
 (macro (push val lst)
     `(do (= ,lst (cons ,val ,lst))

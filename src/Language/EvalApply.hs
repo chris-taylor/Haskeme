@@ -1,7 +1,8 @@
-module Language.EvalApply (eval, apply, load) where
+module Language.EvalApply (eval, apply, macroExpand, load) where
 
 import Control.Monad.Error
 import Data.Array
+import Data.IORef
 import qualified Data.Map as Map
 
 import Language.LispVal
@@ -27,69 +28,19 @@ eval env (List (Atom "do" : exprs)) = evalDo env exprs
 eval env (List (Atom "if" : exprs)) = evalIf env exprs
 eval env (List (Atom "case" : key : clauses)) = evalCase env key clauses
 eval env (List (Atom "=" : args)) = evalSet env args
-eval env (List (Atom "load" : params)) = evalLoad env params
 eval env (List (Atom "def" : var : rest)) = evalDefine env var rest
-eval env (List (Atom "macro" : mac : rest)) = evalDefineMacro env mac rest
+eval env (List [Atom "expand", code]) = macroExpand env code
+--eval env (List (Atom "macro" : mac : rest)) = evalDefineMacro env mac rest
 eval env (List (Atom "fn" : params : body)) = evalLambda env params body
 eval env (List (Atom "uniq" : rest)) = genUniqueSym env rest
+eval env (List [Atom "show-env", String ns]) = showNamespace ns env
 eval env (List (function : args)) = evalApplication env function args
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
-
--- Application
-
-apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
-apply (PrimitiveFunc _ func) args = liftThrows $ func args
-apply (IOFunc _ func) args        = func args
-apply (Func  params varargs body closure) args = applyFunc params varargs body closure args
-apply (Macro params varargs body closure) args = applyFunc params varargs body closure args
-apply (String str) args = applyString str args
-apply (Vector arr) args = applyVector arr args
-apply (Hash hash) args  = applyHash hash args
-apply other _ = throwError $ TypeMismatch "procedure, macro, string, vector or hash" other
-
-applyFunc :: [String] -> Maybe String -> [LispVal] -> Env -> [LispVal] -> IOThrowsError LispVal
-applyFunc params varargs body closure args = 
-    if num params /= num args && varargs == Nothing
-        then throwError $ NumArgs (num params) args
-        else (liftIO $ bindVars closure $ zip params args) >>= bindVarArgs varargs >>= evalBody
-    where
-        remainingArgs = drop (length params) args
-        num = toInteger . length
-        evalBody env = liftM last $ mapM (eval env) body
-        bindVarArgs arg env = case arg of
-            Just argName -> liftIO $ bindVars env [(argName, List $ remainingArgs)]
-            Nothing -> return env
-
-applyString :: String -> [LispVal] -> IOThrowsError LispVal
-applyString str [Number n] = let index = fromInteger n in
-    if index < length str
-        then return $ Char $ str !! index
-        else throwError $ OutOfRange index (0, length str - 1) (String str)
-applyString str [arg]      = throwError $ TypeMismatch "integer" arg
-applyString str args       = throwError $ NumArgs 1 args
-
-applyVector :: (Array Int LispVal) -> [LispVal] -> IOThrowsError LispVal
-applyVector arr [Number n] = let index = fromInteger n in
-    if index < (snd $ bounds arr) + 1
-        then return $ arr ! index
-        else throwError $ OutOfRange index (bounds arr) (Vector arr)
-applyVector arr [arg]      = throwError $ TypeMismatch "integer" arg
-applyVector arr args       = throwError $ NumArgs 1 args
-
-applyHash :: (Map.Map LispVal LispVal) -> [LispVal] -> IOThrowsError LispVal
-applyHash hash [key] = maybe (throwError $ KeyNotFound key $ Hash hash)
-                             (\value -> return value)
-                             (Map.lookup key hash)
-applyHash hash args  = throwError $ NumArgs 1 args
-
--- Evaluation of special forms
 
 evalApplication :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalApplication env function args = do
     func <- eval env function
-    case func of 
-        (Macro {}) -> apply func args >>= eval env
-        _          -> mapM (eval env) args >>= apply func
+    mapM (expandThenEval env) args >>= apply func
 
 evalDefine :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalDefine env (Atom var) [form] =
@@ -125,9 +76,6 @@ evalIf' :: Env -> Bool -> [LispVal] -> IOThrowsError LispVal
 evalIf' env truth [conseq]        = evalIf' env truth [conseq, Bool False]
 evalIf' env truth [conseq, alt]   = if truth then eval env conseq else eval env alt
 evalIf' env truth (conseq : rest) = if truth then eval env conseq else evalIf env rest
-
-bindOne :: Env -> (String, LispVal) -> IOThrowsError Env
-bindOne env (var, val) = liftIO $ bindVars env [(var, val)]
 
 evalCase :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalCase env key clauses = do
@@ -173,26 +121,122 @@ eqqList n env (List [Atom "unquotesplicing", val]) = do
 eqqList n env (List vals) = liftM (return . List . concat) $ mapM (eqqList n env) vals
 eqqList n env val = return $ return val
 
-evalLoad :: Env -> [LispVal] -> IOThrowsError LispVal
-evalLoad env [arg] = do
+-- Macro expansion
+
+macroExpand :: Env -> LispVal -> IOThrowsError LispVal
+{-  Macro evaluation takes two environments: the normal environment containing
+    all primitives and user definitions, and a special macro environment that
+    contains only macro forms. Evaluation works as follows:
+    - If the form is a list and the first element is the symbol 'load, then
+      evaluate the second element to get a filename and read in that file,
+      expanding and evaluating each separate definition.
+    - If the form is a list, and the first element is they symbol 'macro, then
+      create a new macro and store it in the macro namespace.
+    - If the form is a list with an atom as the first element, then check if
+      that atom has a binding in the macro environment. If it does, then apply
+      the macro to the remaining elements of the list **after macro expanding,
+      but not evaluating, them**
+    - If the form is an atom, check if it has a binding in the macro
+      environment. If so, then quote and return the associated macro, otherwise
+      return the form.
+    - If the form is anything other than a list or an atom, then return it. -}
+macroExpand env (List (Atom "load" : params)) = expandLoad env params
+macroExpand env (List (Atom "macro" : params : body)) = expandDefinition env params body
+macroExpand env val@(List (Atom name : args)) = expandApplication env val
+macroExpand env val@(Atom name) = expandAtom env val
+macroExpand env val = return val
+
+expandLoad :: Env -> [LispVal] -> IOThrowsError LispVal
+expandLoad env [arg] = do
     result <- eval env arg
     case result of
-        (String filename) -> load filename >>= liftM last . mapM (eval env)
+        (String filename) -> load filename >>= liftM last . mapM (expandThenEval env)
         other             -> throwError $ TypeMismatch "string" other
-evalLoad env args = throwError $ NumArgs 1 args
+expandLoad env args = throwError $ NumArgs 1 args
+
+expandDefinition :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
+expandDefinition env (List (Atom var : params)) body = 
+    makeNormalMacro env params body >>= defineMacro env var >>= returnQuoted
+expandDefinition env (DottedList (Atom var : params) varargs) body = 
+    makeVarArgsMacro varargs env params body >>= defineMacro env var >>= returnQuoted
+
+expandApplication :: Env -> LispVal -> IOThrowsError LispVal
+expandApplication envRef val@(List (Atom name : args)) = do
+    env <- liftIO $ readIORef envRef
+    maybe (return val)
+          (\macroRef -> do
+            macro <- liftIO $ readIORef macroRef
+            mapM (macroExpand envRef) args >>= apply macro >>= macroExpand envRef)
+          (macroLookup name env)
+
+expandAtom :: Env -> LispVal -> IOThrowsError LispVal
+expandAtom envRef val@(Atom name) = do
+    env <- liftIO $ readIORef envRef
+    maybe (return val)
+          (\macroRef -> do
+            macro <- liftIO $ readIORef macroRef
+            returnQuoted macro)
+          (macroLookup name env)
+
+-- Combined eval and expand
+
+expandThenEval :: Env -> LispVal -> IOThrowsError LispVal
+expandThenEval env val = macroExpand env val >>= eval env
+
+-- Application
+
+apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
+apply (PrimitiveFunc _ func) args = liftThrows $ func args
+apply (IOFunc _ func) args        = func args
+apply (Func  params varargs body closure) args = applyFunc params varargs body closure args
+apply (Macro params varargs body closure) args = applyFunc params varargs body closure args
+apply (String str) args = applyString str args
+apply (Vector arr) args = applyVector arr args
+apply (Hash hash) args  = applyHash hash args
+apply other _ = throwError $ TypeMismatch "procedure, macro, string, vector or hash" other
+
+applyFunc :: [String] -> Maybe String -> [LispVal] -> Env -> [LispVal] -> IOThrowsError LispVal
+applyFunc params varargs body closure args = 
+    if num params /= num args && varargs == Nothing
+        then throwError $ NumArgs (num params) args
+        else (liftIO $ bindVars closure $ zip params args) >>= bindVarArgs varargs >>= evalBody
+    where
+        remainingArgs = drop (length params) args
+        num = toInteger . length
+        evalBody env = liftM last $ mapM (expandThenEval env) body
+        bindVarArgs arg env = case arg of
+            Just argName -> liftIO $ bindVars env [(argName, List $ remainingArgs)]
+            Nothing -> return env
+
+applyString :: String -> [LispVal] -> IOThrowsError LispVal
+applyString str [Number n] = let index = fromInteger n in
+    if index < length str
+        then return $ Char $ str !! index
+        else throwError $ OutOfRange index (0, length str - 1) (String str)
+applyString str [arg]      = throwError $ TypeMismatch "integer" arg
+applyString str args       = throwError $ NumArgs 1 args
+
+applyVector :: (Array Int LispVal) -> [LispVal] -> IOThrowsError LispVal
+applyVector arr [Number n] = let index = fromInteger n in
+    if index < (snd $ bounds arr) + 1
+        then return $ arr ! index
+        else throwError $ OutOfRange index (bounds arr) (Vector arr)
+applyVector arr [arg]      = throwError $ TypeMismatch "integer" arg
+applyVector arr args       = throwError $ NumArgs 1 args
+
+applyHash :: (Map.Map LispVal LispVal) -> [LispVal] -> IOThrowsError LispVal
+applyHash hash [key] = maybe (throwError $ KeyNotFound key $ Hash hash)
+                             (\value -> return value)
+                             (Map.lookup key hash)
+applyHash hash args  = throwError $ NumArgs 1 args
 
 -- Helper functions
 
-truthVal :: LispVal -> Bool
-truthVal (Bool False) = False
-truthVal (Number 0)   = False
-truthVal (Ratio 0)    = False
-truthVal (Float 0)    = False
-truthVal (Complex 0)  = False
-truthVal (String "")  = False
-truthVal (List [])    = False
-truthVal (Vector arr) = let (_, n) = bounds arr in n > 0
-truthVal _            = True
+returnQuoted :: LispVal -> IOThrowsError LispVal
+returnQuoted val = return $ List [Atom "quote", val]
+
+bindOne :: Env -> (String, LispVal) -> IOThrowsError Env
+bindOne env (var, val) = liftIO $ bindVars env [(var, val)]
 
 load :: String -> IOThrowsError [LispVal]
 load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
