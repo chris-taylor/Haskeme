@@ -271,6 +271,11 @@
 
 ;;;; CONTROL FLOW
 
+; DO performs its actions in sequence
+
+(macro (do . args)
+    `((fn () ,@args)))
+
 ; WHEN executes a list of statements only if the test returns a non-false value
 ; UNLESS executes the statements only if the test returns false
 
@@ -279,6 +284,21 @@
 
 (macro (unless test . body)
     `(if (not ,test) (do ,@body)))
+
+; CASE evaluates its first argument. It then walks down the key/value pairs
+; to compare for equality with the keys, returning the value of the first match.
+
+(macro (caselet var expr . args)
+    (let ex (afn (args)
+                (if (no (cdr args))
+                    (car args)
+                    `(if (is ,var ',(car args))
+                            ,(cadr args)
+                            ,(self (cddr args)))))
+    `(let ,var ,expr ,(ex args))))
+
+(macro (case expr . args)
+    `(caselet ,(uniq) ,expr ,@args))
 
 ; AND returns true if all its arguments are true, else it returns false
 ; OR returns true if at least one of its arguments is true
@@ -297,19 +317,21 @@
 ; executes the body and the update step until the test is satisfied.
 
 (macro (loop start test update . body)
-    `(do ,start
-         ((afn (gparm)
-            (if gparm
-                (do ,@body ,update (self ,test))))
-          ,test)))
+    (w/uniq gparm
+        `(do ,start
+            ((afn (,gparm)
+                (if ,gparm
+                    (do ,@body ,update (self ,test))))
+            ,test))))
 
 ; FOR binds the variable v to init, and on every step it increments v by 1 and
 ; executes the body, until v exceeds max.
 
 (macro (for v init max . body)
-    `(with (,v nil gi ,init gm (+ ,max 1))
-        (loop (= ,v gi) (< ,v gm) (++ ,v)
-            ,@body)))
+    ;(w/uniq (gi gm)
+        `(with (,v nil gi ,init gm (+ ,max 1))
+            (loop (= ,v gi) (< ,v gm) (++ ,v)
+                ,@body)))
 
 (macro (forlen var s . body)
     `(for ,var 0 (- (len ,s) 1) ,@body))

@@ -12,7 +12,6 @@ module Language.LispVal (
     , ThrowsError
     , IOThrowsError
     , showVal, nil, eqv, unwordsList, pairs, unpairs, truthVal
-    , makeNormalFunc, makeVarArgs, makeNormalMacro, makeVarArgsMacro
     , trapError, extractValue, liftThrows, runIOThrows
     ) where
 
@@ -98,24 +97,6 @@ pairs (x : y : rest) = (x, y) : pairs rest
 unpairs :: [(a,a)] -> [a]
 unpairs [] = []
 unpairs ((x,y) : rest) = x : y : unpairs rest
-
-makeFunc :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
-makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
-
-makeNormalFunc :: (Monad m) => Env -> [LispVal] -> [LispVal] -> m LispVal
-makeNormalFunc = makeFunc Nothing
-
-makeVarArgs :: (Monad m) => LispVal -> Env -> [LispVal] -> [LispVal] -> m LispVal
-makeVarArgs = makeFunc . Just . showVal
-
-makeMacro :: (Monad m) => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
-makeMacro varargs env params body = return $ Macro (map showVal params) varargs body env
-
-makeNormalMacro :: (Monad m) => Env -> [LispVal] -> [LispVal] -> m LispVal
-makeNormalMacro = makeMacro Nothing
-
-makeVarArgsMacro :: (Monad m) => LispVal -> Env -> [LispVal] -> [LispVal] -> m LispVal
-makeVarArgsMacro = makeMacro . Just . showVal
 
 -- Error handling
 

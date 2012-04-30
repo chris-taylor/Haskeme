@@ -203,8 +203,8 @@ genUniqueName env args = case args of
 
 -- Debugging
 
-showNamespace :: Namespace -> Env -> IOThrowsError LispVal
-showNamespace name envRef = do
+showNamespace :: Env -> LispVal -> IOThrowsError LispVal
+showNamespace envRef (String name) = do
     env <- liftIO $ readIORef envRef
     let namespace = filter (\((n,_),_) -> n == name) (Map.toList env)
     forM_ namespace printVar
@@ -213,3 +213,4 @@ showNamespace name envRef = do
         printVar ((_,var),valRef) = do
             val <- liftIO $ readIORef valRef
             liftIO $ putStrLn (var ++ " : " ++ show val)
+showNamespace _ other = throwError $ TypeMismatch "string" other

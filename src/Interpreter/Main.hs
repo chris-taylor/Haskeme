@@ -72,7 +72,7 @@ evalString env expr = evalExpr env expr >> return ()
 
 evalExpr :: Env -> String -> IO String
 evalExpr env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>=
-    macroExpand env >>= eval env
+    meval env >>= eval env
 
 -- Environments
 
