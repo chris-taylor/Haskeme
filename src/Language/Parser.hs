@@ -4,7 +4,6 @@ import Control.Monad.Error
 import Text.ParserCombinators.Parsec
 import Text.Parsec.Language
 import qualified Text.Parsec.Token as P
-import Numeric (readOct, readHex, readFloat)
 import Data.Array
 import qualified Data.Map as Map
 import Ratio

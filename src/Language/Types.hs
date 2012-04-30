@@ -77,11 +77,15 @@ showVal (Macro { macroParams = args, macroVararg = varargs }) = showFunc "macro"
 showVal (Port _) = "<IO port>"
 
 showFunc :: String -> [String] -> Maybe String -> String
-showFunc name args varargs = 
-    "(" ++ name ++ " (" ++ unwords args ++
-        (case varargs of
+showFunc name args varargs = "(" ++ name ++ " " ++
+    (case args of
+        [] -> (case varargs of
+            Nothing -> "()"
+            Just arg -> arg)
+        _  -> "(" ++ unwords args ++ (case varargs of
             Nothing  -> ""
-            Just arg -> " . " ++ arg) ++ ") ...)"
+            Just arg -> " . " ++ arg) ++ ")"
+    ) ++ " ...)"
 
 nil :: LispVal
 nil = List []

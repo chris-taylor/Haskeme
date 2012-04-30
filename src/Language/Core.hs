@@ -46,16 +46,30 @@ evalApplication env function args = do
 evalDefine :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalDefine env (Atom var) [form] =
     expandThenEval env form >>= defineVar env var
-evalDefine env (List (Atom var : params)) body = 
+evalDefine env (Atom var) (List params : body) = 
     makeNormalFunc env params body >>= defineVar env var
-evalDefine env (DottedList (Atom var : params) varargs) body =
+evalDefine env (Atom var) (DottedList params varargs : body) = 
     makeVarArgs varargs env params body >>= defineVar env var
+evalDefine env (Atom var) (varargs@(Atom _) : body) = 
+    makeVarArgs varargs env [] body >>= defineVar env var
+
+--evalDefine env (List (Atom var : params)) body = 
+--    makeNormalFunc env params body >>= defineVar env var
+--evalDefine env (DottedList (Atom var : params) varargs) body =
+--    makeVarArgs varargs env params body >>= defineVar env var
 
 evalDefineMacro :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
-evalDefineMacro env (List (Atom var : params)) body = 
+evalDefineMacro env (Atom var) (List params : body) = 
     makeNormalMacro env params body >>= defineMacro env var
-evalDefineMacro env (DottedList (Atom var : params) varargs) body =
+evalDefineMacro env (Atom var) (DottedList params varargs : body) = 
     makeVarArgsMacro varargs env params body >>= defineMacro env var
+evalDefineMacro env (Atom var) (varargs@(Atom _) : body) = 
+    makeVarArgsMacro varargs env [] body >>= defineMacro env var
+
+--evalDefineMacro env (List (Atom var : params)) body = 
+--    makeNormalMacro env params body >>= defineMacro env var
+--evalDefineMacro env (DottedList (Atom var : params) varargs) body =
+--    makeVarArgsMacro varargs env params body >>= defineMacro env var
 
 evalLambda :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalLambda env (List params) body = makeNormalFunc env params body
