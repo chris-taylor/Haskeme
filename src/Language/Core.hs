@@ -1,12 +1,12 @@
-module Language.EvalApply (eval, apply, meval, load) where
+module Language.Core (eval, apply, meval, load) where
 
 import Control.Monad.Error
 import Data.Array
 import Data.IORef
 import qualified Data.Map as Map
 
-import Language.LispVal
-import Language.LispParser
+import Language.Types
+import Language.Parser
 import Language.Variables
 
 -- Evaluation

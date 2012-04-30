@@ -1,6 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction, TypeSynonymInstances, FlexibleInstances #-}
 
-module Language.LispVal (
+module Language.Types (
       LispVal (..)
     , LispError (..)
     , VectorType

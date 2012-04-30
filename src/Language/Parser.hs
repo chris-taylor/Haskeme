@@ -1,4 +1,4 @@
-module Language.LispParser (readExpr, readExprList) where
+module Language.Parser (readExpr, readExprList) where
 
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec
@@ -12,7 +12,7 @@ import Complex
 import Data.Array
 import Char (digitToInt)
 
-import Language.LispVal
+import Language.Types
 
 lispDef :: LanguageDef ()
 lispDef = emptyDef

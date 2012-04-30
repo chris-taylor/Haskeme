@@ -25,11 +25,11 @@ Library
     Build-Depends:      base >= 2, parsec, mtl, haskell98, containers, array, random
     Extensions:         ExistentialQuantification
     Hs-Source-Dirs:     src
-    Exposed-Modules:    Language.LispVal
+    Exposed-Modules:    Language.Types
                         Language.Variables
-                        Language.EvalApply
-                        Language.LispNum
-                        Language.LispParser
+                        Language.Core
+                        Language.Numeric
+                        Language.Parser
                         Language.IOPrimitives
                         Language.Primitives
 

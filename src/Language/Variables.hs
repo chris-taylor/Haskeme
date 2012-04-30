@@ -5,7 +5,7 @@ import Data.Array
 import qualified Data.Map as Map
 import Control.Monad.Error
 
-import Language.LispVal
+import Language.Types
 
 nullEnv :: IO Env
 nullEnv = newIORef Map.empty

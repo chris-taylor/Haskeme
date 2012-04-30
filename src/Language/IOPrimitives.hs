@@ -4,9 +4,9 @@ import IO
 import Control.Monad.Error
 import System.Random
 
-import Language.LispVal
-import Language.LispParser
-import Language.EvalApply
+import Language.Types
+import Language.Parser
+import Language.Core
 
 ioPrimitives :: [(String, [LispVal] -> IOThrowsError LispVal)]
 ioPrimitives = [ ("apply", applyProc)

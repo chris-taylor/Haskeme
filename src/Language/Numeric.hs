@@ -1,6 +1,6 @@
 {-# LANGUAGE ExistentialQuantification, Rank2Types #-}
 
-module Language.LispNum (numericPrimitives) where
+module Language.Numeric (numericPrimitives) where
 
 import Control.Monad.Error
 import Control.Applicative
@@ -8,7 +8,7 @@ import Data.Either
 import Ratio
 import Complex
 
-import Language.LispVal
+import Language.Types
 
 data NumType = IntType | RatioType | FloatType | ComplexType | NotANumber
     deriving (Eq,Ord)

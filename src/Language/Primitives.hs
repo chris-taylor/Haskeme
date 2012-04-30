@@ -8,8 +8,8 @@ import qualified Data.Map as Map
 import Ratio
 import Complex
 
-import Language.LispNum
-import Language.LispVal
+import Language.Numeric
+import Language.Types
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = numericPrimitives ++ 

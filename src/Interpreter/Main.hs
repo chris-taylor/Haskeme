@@ -4,12 +4,12 @@ import System.Environment
 import Control.Monad.Error
 import IO hiding (try)
 
-import Language.LispVal
-import Language.LispParser
+import Language.Core
+import Language.Types
+import Language.Parser
 import Language.Primitives
 import Language.IOPrimitives
 import Language.Variables
-import Language.EvalApply
 
 import Paths_haskeme
 
