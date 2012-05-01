@@ -184,23 +184,6 @@ setVectorIndex varRef arr index val = case index of
 setHashKey :: IORef LispVal -> HashType -> LispVal -> LispVal -> IOThrowsError ()
 setHashKey varRef hash key val = liftIO $ writeIORef varRef (Hash $ Map.insert key val hash)
 
-genUniqueSym :: Env -> [LispVal] -> IOThrowsError LispVal
-genUniqueSym envRef args = if null args
-    then genUniqueSym envRef [String ""]
-    else do
-        env <- liftIO $ readIORef envRef
-        sym <- genUniqueName env args
-        liftIO $ do
-            nullRef <- newIORef (List [])
-            writeIORef envRef $ varInsert sym nullRef env
-        return $ Atom sym
-
-genUniqueName :: EnvType -> [LispVal] -> IOThrowsError String
-genUniqueName env args = case args of
-    [String name] -> return $ "#:" ++ name ++ show (1 + Map.size env)
-    [notString]   -> throwError $ TypeMismatch "string" notString
-    badArgs       -> throwError $ NumArgs 1 badArgs
-
 -- Debugging
 
 showNamespace :: Env -> LispVal -> IOThrowsError LispVal

@@ -1,6 +1,7 @@
 module Language.IOPrimitives (ioPrimitives) where
 
-import IO
+import System.IO
+import Data.Unique
 import Control.Monad.Error
 import System.Random
 
@@ -16,9 +17,12 @@ ioPrimitives = [ ("apply", applyProc)
                , ("close-output-port", closePort)
                , ("read", readProc)
                , ("write", writeProc)
+               , ("pr", printProc putStr)
+               , ("prn", printProc putStrLn)
                , ("read-contents", readContents)
                , ("read-all", readAll)
-               , ("random", rand) ]
+               , ("random", rand)
+               , ("uniq", gensym) ]
 
 applyProc :: [LispVal] -> IOThrowsError LispVal
 applyProc [func, List args] = apply func args
@@ -39,11 +43,33 @@ writeProc :: [LispVal] -> IOThrowsError LispVal
 writeProc [obj] = writeProc [obj, Port stdout]
 writeProc [obj, Port port] = liftIO $ hPrint port obj >> (return $ Bool True)
 
+printProc :: (String -> IO ()) -> [LispVal] -> IOThrowsError LispVal
+printProc printer []     = liftIO $ printer "" >> return nil
+printProc printer (x:xs) = liftIO (putStr $ pr x) >> printProc printer xs
+    where pr (String s) = s
+          pr (Char c)   = [c]
+          pr other      = showVal other
+
 readContents :: [LispVal] -> IOThrowsError LispVal
 readContents [String filename] = asIO String $ readFile filename
 
 readAll :: [LispVal] -> IOThrowsError LispVal
 readAll [String filename] = liftM List $ load filename
+
+-- Unique symbols
+
+_gensym :: String -> IOThrowsError LispVal
+_gensym prefix = do
+    u <- liftIO $ newUnique
+    return $ Atom $ prefix ++ (show $ toInteger $ hashUnique u)
+
+gensym :: [LispVal] -> IOThrowsError LispVal
+gensym []              = _gensym "#g"
+gensym [String prefix] = _gensym prefix
+gensym [notString]     = throwError $ TypeMismatch "string" notString
+gensym badArgs         = throwError $ NumArgs 1 badArgs
+
+-- Random numbers
 
 rand :: [LispVal] -> IOThrowsError LispVal
 rand [modulus] = case modulus of

@@ -329,10 +329,10 @@
 ; executes the body, until v exceeds max.
 
 (macro for (v init max . body)
-    ;(w/uniq (gi gm)
-        `(with (,v nil gi ,init gm (+ ,max 1))
-            (loop (= ,v gi) (< ,v gm) (++ ,v)
-                ,@body)))
+    (w/uniq (gi gm)
+        `(with (,v nil ,gi ,init ,gm (+ ,max 1))
+            (loop (= ,v ,gi) (< ,v ,gm) (++ ,v)
+                ,@body))))
 
 (macro forlen (var s . body)
     `(for ,var 0 (- (len ,s) 1) ,@body))

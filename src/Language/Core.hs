@@ -30,7 +30,7 @@ eval env (List (Atom "def" : var : rest)) = evalDefine env var rest
 eval env (List (Atom "macro" : params : body)) = evalDefineMacro env params body
 eval env (List (Atom "fn" : params : body)) = evalLambda env params body
 eval env (List (Atom "load" : params)) = evalLoad env params
-eval env (List (Atom "uniq" : rest)) = genUniqueSym env rest
+--eval env (List (Atom "uniq" : rest)) = gensym rest
 -- Here for debugging
 eval env (List [Atom "expand", code]) = expandThenEval env code >>= meval env
 eval env (List [Atom "show-env", namespace]) = showNamespace env namespace
