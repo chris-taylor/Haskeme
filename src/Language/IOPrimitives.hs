@@ -41,7 +41,7 @@ readProc [Port port] = (liftIO $ hGetLine port) >>= liftThrows . readExpr
 
 writeProc :: [LispVal] -> IOThrowsError LispVal
 writeProc [obj] = writeProc [obj, Port stdout]
-writeProc [obj, Port port] = liftIO $ hPrint port obj >> (return $ Bool True)
+writeProc [obj, Port port] = liftIO $ hPrint port obj >> return nil
 
 printProc :: (String -> IO ()) -> [LispVal] -> IOThrowsError LispVal
 printProc printer []     = liftIO $ printer "" >> return nil

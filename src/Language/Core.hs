@@ -30,9 +30,9 @@ eval env (List (Atom "def" : var : rest)) = evalDefine env var rest
 eval env (List (Atom "macro" : params : body)) = evalDefineMacro env params body
 eval env (List (Atom "fn" : params : body)) = evalLambda env params body
 eval env (List (Atom "load" : params)) = evalLoad env params
---eval env (List (Atom "uniq" : rest)) = gensym rest
 -- Here for debugging
 eval env (List [Atom "expand", code]) = expandThenEval env code >>= meval env
+eval env (List [Atom "expand1", code]) = expandThenEval env code >>= expandOne env
 eval env (List [Atom "show-env", namespace]) = showNamespace env namespace
 -- End debug section
 eval env (List (function : args)) = evalApplication env function args
@@ -53,11 +53,6 @@ evalDefine env (Atom var) (DottedList params varargs : body) =
 evalDefine env (Atom var) (varargs@(Atom _) : body) = 
     makeVarArgs varargs env [] body >>= defineVar env var
 
---evalDefine env (List (Atom var : params)) body = 
---    makeNormalFunc env params body >>= defineVar env var
---evalDefine env (DottedList (Atom var : params) varargs) body =
---    makeVarArgs varargs env params body >>= defineVar env var
-
 evalDefineMacro :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalDefineMacro env (Atom var) (List params : body) = 
     makeNormalMacro env params body >>= defineMacro env var
@@ -65,11 +60,6 @@ evalDefineMacro env (Atom var) (DottedList params varargs : body) =
     makeVarArgsMacro varargs env params body >>= defineMacro env var
 evalDefineMacro env (Atom var) (varargs@(Atom _) : body) = 
     makeVarArgsMacro varargs env [] body >>= defineMacro env var
-
---evalDefineMacro env (List (Atom var : params)) body = 
---    makeNormalMacro env params body >>= defineMacro env var
---evalDefineMacro env (DottedList (Atom var : params) varargs) body =
---    makeVarArgsMacro varargs env params body >>= defineMacro env var
 
 evalLambda :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalLambda env (List params) body = makeNormalFunc env params body
@@ -164,9 +154,19 @@ meval :: Env -> LispVal -> IOThrowsError LispVal
       environment. If so, then quote and return the associated macro, otherwise
       return the form.
     - If the form is anything other than a list or an atom, then return it. -}
-meval env val@(List (name : args)) = expandApplication env val
-meval env val@(Atom name) = expandAtom env val
+meval env val@(List _) = expandApplication env val
+--meval env val@(Atom name) = expandAtom env val
 meval env val = return val
+
+expandOne :: Env -> LispVal -> IOThrowsError LispVal
+expandOne envRef val@(List (Atom name : args)) = do
+    env <- liftIO $ readIORef envRef
+    maybe (return val)
+          (\macroRef -> do
+            macro <- liftIO $ readIORef macroRef
+            apply macro args)
+          (macroLookup name env)
+expandOne envRef val = return val
 
 expandApplication :: Env -> LispVal -> IOThrowsError LispVal
 expandApplication envRef val@(List (Atom name : args)) = do
