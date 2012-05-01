@@ -13,12 +13,12 @@ I've also borrowed some ideas from Arc and Q:
 
 * Data types
   - Symbol, Pair, Char, String, Boolean
-  - Numeric types (Integer, Rational, Float, Complex)
-  - Vectors (constant access time lists)
-  - Hashes (key-value stores)
+  - Full numeric tower (Integer, Rational, Float, Complex)
+  - Vectors
+  - Hashes
   - Procedures
 * Control flow
-  - Conditionals (`if`, `case`)
+  - Conditionals (`if`, `case`, `when`)
   - Statement grouping with `do`
 * Scope
   - Top-level definitions with `def`
@@ -26,26 +26,24 @@ I've also borrowed some ideas from Arc and Q:
 * Assignment
   - Assignment using `=` operator
   - Assignment reaches inside structures: `(= (car x) 1)`
-  - Set elements of strings, vectors and hashes too: `(= (vec 0) 1)`
+  - Set elements of strings, vectors and hashes: `(= (vec 0) 1)`
 * Functions:
   - User defined functions, lambdas (with `fn` keyword) and lexical closures
   - Notation for unary functions: `[+ _ 1]`
   - Full suite of numeric functions (trigonometry, sqrt, exp/log etc)
+  - Basic random number generation with `random`
   - Can call strings, vectors and hashes as if they were functions: `(vec 0)` etc.
 * I/O
   - Read/write to stdin/stdout or any file
   - Load libraries from a file
-* Basic macro system:
+* Flexible macro system:
   - Whole language, including user defined functions, available at macro expansion time
-  - Macros are first-class values (yeah, let's see how that works out...)
 * Standard library
  
 ## Still to come
 
 * Tail call optimization
-* Separate macro compilation phase
+* Continuations
 * Compiler
 * Random numbers
-* Continuations
-* Stream data type
-* R5RS compliance
+* Streams (lazy lists)
