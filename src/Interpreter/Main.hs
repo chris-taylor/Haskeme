@@ -2,7 +2,8 @@ module Main where
 
 import System.Environment
 import Control.Monad.Error
-import IO hiding (try)
+import System.IO
+import System.Info
 
 import Language.Core
 import Language.Types
@@ -35,14 +36,16 @@ runRepl = do
 
 loadLibraries :: Env -> IO ()
 loadLibraries env = do
-    stdlib <- getDataFileName "lib/stdlib.scm"
+    stdlib <- getDataFileName $ if os == "mingw32"
+        then "lib\\stdlib.scm"
+        else "lib/stdlib.scm"
     putStrLn $ "Loading library from " ++ stdlib
     evalString env $ "(load  \"" ++ (escapeBackslashes stdlib) ++ "\")"
 
 -- IO Functions
 
 versionNum :: String
-versionNum = "0.1"
+versionNum = "0.2"
 
 showHeader :: IO ()
 showHeader = do
@@ -81,7 +84,7 @@ primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc IOFunc) ioPrimiti
                                               ++ map (makeFunc PrimitiveFunc) primitives)
     where makeFunc constructor (var, func) = (var, constructor var func)
 
--- Monadic looping
+-- Utility functions
 
 untilM_ :: (Monad m) => (a -> Bool) -> m a -> (a -> m ()) -> m ()
 untilM_ predicate prompt action = do
