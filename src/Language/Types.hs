@@ -63,7 +63,12 @@ showVal (Atom name) = name
 showVal (Number num) = show num
 showVal (Ratio num) = show (numerator num) ++ "/" ++ show (denominator num)
 showVal (Float num) = show num
-showVal (Complex num) = show (realPart num) ++ "+" ++ show (imagPart num) ++ "i"
+showVal (Complex num) = let re = realPart num
+                            im = imagPart num
+                        in show re ++ (case signum im of
+                            1    -> "+"
+                            0    -> if isNegativeZero im then "-" else "+"
+                            (-1) -> "-") ++ show (myabs im) ++ "i"
 showVal (Bool True) = "#t"
 showVal (Bool False) = "#f"
 showVal (List contents) = "(" ++ unwordsList contents ++ ")"
@@ -75,6 +80,13 @@ showVal (IOFunc name _) = "<ioPrimitive:" ++ name ++ ">"
 showVal (Func { params = args, vararg = varargs }) = showFunc "fn" args varargs
 showVal (Macro { macroParams = args, macroVararg = varargs }) = showFunc "macro" args varargs
 showVal (Port _) = "<IO port>"
+
+-- This is required because Haskell evaluates abs (-0.0) to -0.0, which messes
+-- up the printing of complex values then the imaginary part is negative zero.
+myabs :: Num a => a -> a
+myabs x | x > 0  = x
+        | x == 0 = 0
+        | x < 0  = -x
 
 showFunc :: String -> [String] -> Maybe String -> String
 showFunc name args varargs = "(" ++ name ++ " " ++
