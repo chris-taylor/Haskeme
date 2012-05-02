@@ -19,10 +19,6 @@ primitives = numericPrimitives ++
              , ("char?", unaryBoolOp isChar)
              , ("string?", unaryBoolOp isString)
              , ("number?", unaryBoolOp isNumber)
-             , ("integer?", unaryBoolOp isInteger)
-             , ("rational?", unaryBoolOp isRatio)
-             , ("real?", unaryBoolOp isFloat)
-             , ("complex?", unaryBoolOp isComplex)
              , ("vector?", unaryBoolOp isVector)
              , ("hash?", unaryBoolOp isHash)
              , ("procedure?", unaryBoolOp isProcedure)
@@ -188,22 +184,6 @@ isNumber (Ratio _)   = True
 isNumber (Float _)   = True
 isNumber (Complex _) = True
 isNumber _           = False
-
-isInteger :: LispVal -> Bool
-isInteger (Number _) = True
-isInteger _          = False
-
-isRatio :: LispVal -> Bool
-isRatio (Ratio _) = True
-isRatio _         = False
-
-isFloat :: LispVal -> Bool
-isFloat (Float _) = True
-isFloat _         = False
-
-isComplex :: LispVal -> Bool
-isComplex (Complex _) = True
-isComplex _           = False
 
 isVector :: LispVal -> Bool
 isVector (Vector _) = True
