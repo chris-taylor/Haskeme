@@ -29,7 +29,7 @@ showHeader = do
     putStrLn $ ""
 
 showMsg :: IO ()
-showMsg = putStrLn "Welcome to Haskeme! Enter " ++ quitCmd ++ " to quit.\n"
+showMsg = putStrLn $ "Welcome to Haskeme! Enter " ++ quitCmd ++ " to quit.\n"
 
 defaultPrompt :: String
 defaultPrompt = "haskeme> "
