@@ -20,45 +20,13 @@ numType (Float _)   = FloatType
 numType (Complex _) = ComplexType
 numType _           = NotANumber
 
-asComplex :: LispVal -> Complex Double
-asComplex (Number n)  = fromInteger n
-asComplex (Ratio n)   = fromRational n
-asComplex (Float n)   = n :+ 0
-asComplex (Complex n) = n
-
-asFloat :: LispVal -> Double
-asFloat (Number n) = fromInteger n
-asFloat (Ratio n)  = fromRational n
-asFloat (Float n)  = n
-
-asRatio :: LispVal -> Rational
-asRatio (Number n) = fromInteger n
-asRatio (Ratio n)  = n
-
-asNumber :: LispVal -> Integer
-asNumber (Number n) = n
-
-toComplex :: LispVal -> LispVal
-toComplex = Complex . asComplex
-
-toFloat :: LispVal -> LispVal
-toFloat (Complex n) = Float $ realPart n
-toFloat x           = Float $ asFloat x
-
-toRatio :: LispVal -> LispVal
-toRatio (Complex n) = Ratio $ toRational $ realPart n
-toRatio (Float n)   = Ratio $ toRational n
-toRatio x           = Ratio $ asRatio x
-
-toNumber :: LispVal -> LispVal
-toNumber (Complex n) = Number $ round $ realPart n
-toNumber (Float n)   = Number $ round n
-toNumber (Ratio n)   = Number $ round $ (fromInteger $ numerator n) / (fromInteger $ denominator n)
-toNumber x           = Number $ asNumber x
-
 numericPrimitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 numericPrimitives =
-    [ ("==", numericOrdOp (==))
+    [ ("integer?", typeCheck isInteger)
+    , ("rational?", typeCheck isRatio)
+    , ("real?", typeCheck isFloat)
+    , ("complex?", typeCheck isComplex)
+    , ("==", numericOrdOp (==))
     , ("<", numericOrdOp (<))
     , (">", numericOrdOp (>))
     , ("<=", numericOrdOp (<=))
@@ -93,25 +61,25 @@ numericPrimitives =
     , ("as-real", numericCast toFloat)
     , ("as-complex", numericCast toComplex) ]
 
-foldLeftError :: (b -> a -> ThrowsError b) -> [a] -> b -> ThrowsError b
-foldLeftError op xs res = if length xs == 0
-    then return res
-    else res `op` head xs >>= foldLeftError op (tail xs)
+-- Coerce Haskell base types (used for type promotion - never lose information)
 
-foldLeft1Error :: (LispVal -> LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
-foldLeft1Error op xs = if length xs == 0
-    then throwError $ NumArgs 1 xs
-    else foldLeftError op (tail xs) (head xs)
+asComplex :: LispVal -> Complex Double
+asComplex (Number n)  = fromInteger n
+asComplex (Ratio n)   = fromRational n
+asComplex (Float n)   = n :+ 0
+asComplex (Complex n) = n
 
-numericCast :: (LispVal -> LispVal) -> [LispVal] -> ThrowsError LispVal
-numericCast cast xs  = case xs of
-    [ ] -> throwError $ NumArgs 1 xs
-    [x] -> promote cast x
-    _   -> liftM List $ mapM (promote cast) xs
-    where
-        promote cast x = case numType x of
-            NotANumber -> throwError $ TypeMismatch "number" x
-            _          -> return (cast x)
+asFloat :: LispVal -> Double
+asFloat (Number n) = fromInteger n
+asFloat (Ratio n)  = fromRational n
+asFloat (Float n)  = n
+
+asRatio :: LispVal -> Rational
+asRatio (Number n) = fromInteger n
+asRatio (Ratio n)  = n
+
+asNumber :: LispVal -> Integer
+asNumber (Number n) = n
 
 pushDown :: LispVal -> ThrowsError LispVal
 pushDown num@(Complex z) = if imagPart z == 0
@@ -126,15 +94,84 @@ pushDown num@(Ratio x)   = if isRatioIntegral x
 pushDown num@(Number n)  = return num
 pushDown other           = throwError $ TypeMismatch "number" other
 
+-- Forced coercion within Lisp
+
+toComplex :: LispVal -> LispVal
+toComplex = Complex . asComplex
+
+toFloat :: LispVal -> LispVal
+toFloat (Complex n) = Float $ realPart n
+toFloat x           = Float $ asFloat x
+
+toRatio :: LispVal -> LispVal
+toRatio (Complex n) = Ratio $ toRational $ realPart n
+toRatio (Float n)   = Ratio $ toRational n
+toRatio x           = Ratio $ asRatio x
+
+toNumber :: LispVal -> LispVal
+toNumber (Complex n) = Number $ round $ realPart n
+toNumber (Float n)   = Number $ round n
+toNumber (Ratio n)   = Number $ round $ (fromInteger $ numerator n) / (fromInteger $ denominator n)
+toNumber x           = Number $ asNumber x
+
+numericCast :: (LispVal -> LispVal) -> [LispVal] -> ThrowsError LispVal
+numericCast cast xs  = case xs of
+    [ ] -> throwError $ NumArgs 1 xs
+    [x] -> promote cast x
+    _   -> liftM List $ mapM (promote cast) xs
+    where
+        promote cast x = case numType x of
+            NotANumber -> throwError $ TypeMismatch "number" x
+            _          -> return (cast x)
+
 isFloatIntegral :: Double -> Bool
 isFloatIntegral x = fracPart == 0 where fracPart = x - fromIntegral (round x)
 
 isRatioIntegral :: Rational -> Bool
 isRatioIntegral x = denominator x == 1
 
+-- Type checking
+
+isInteger :: LispVal -> Bool
+isInteger (Number _) = True
+isInteger _          = False
+
+isRatio :: LispVal -> Bool
+isRatio (Number _) = True
+isRatio (Ratio _)  = True
+isRatio _          = False
+
+isFloat :: LispVal -> Bool
+isFloat (Number _) = True
+isFloat (Ratio _)  = True
+isFloat _          = False
+
+isComplex :: LispVal -> Bool
+isComplex (Number _)  = True
+isComplex (Ratio _)   = True
+isComplex (Float _)   = True
+isComplex (Complex _) = True
+isComplex _           = False
+
+-- Combinators
+
+foldLeftError :: (b -> a -> ThrowsError b) -> [a] -> b -> ThrowsError b
+foldLeftError op xs res = if length xs == 0
+    then return res
+    else res `op` head xs >>= foldLeftError op (tail xs)
+
+foldLeft1Error :: (LispVal -> LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
+foldLeft1Error op xs = if length xs == 0
+    then throwError $ NumArgs 1 xs
+    else foldLeftError op (tail xs) (head xs)
+
 numericMinus :: [LispVal] -> ThrowsError LispVal
 numericMinus [x] = numericUnOp negate [x]
 numericMinus xs  = numericBinOp (-) xs
+
+typeCheck :: (LispVal -> Bool) -> [LispVal] -> ThrowsError LispVal
+typeCheck p [x] = return $ Bool (p x)
+typeCheck p xs  = throwError $ NumArgs 1 xs
 
 numericBinOp :: (forall a. Num a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
 numericBinOp op params = foldLeft1Error (promoteNumericBinaryOp op) params >>= pushDown
