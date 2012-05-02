@@ -4,6 +4,7 @@ import System.Environment
 import Control.Monad.Error
 import System.IO
 import System.Info
+import Data.IORef
 
 import Language.Core
 import Language.Types
@@ -16,6 +17,12 @@ import Paths_haskeme
 import Data.Version (showVersion)
 
 -- Config
+
+data ConfigImpl = ConfigImpl { prompt :: String }
+type Config = IORef ConfigImpl
+
+defaultConfig :: IO Config
+defaultConfig = newIORef $ ConfigImpl { prompt = defaultPrompt }
 
 showHeader :: IO ()
 showHeader = do
@@ -53,10 +60,14 @@ runOne args = do
 runRepl :: IO ()
 runRepl = do
     showHeader
+    cfg <- defaultConfig
     env <- primitiveBindings
     loadLibraries env
     showMsg
-    untilM_ (== quitCmd) (readPrompt defaultPrompt) (handleInput env)
+    replLoop cfg env
+
+replLoop :: Config -> Env -> IO ()
+replLoop cfg env = untilM_ (== quitCmd) (readPrompt cfg) (handleInput cfg env)
 
 -- IO Functions
 
@@ -68,17 +79,23 @@ loadLibraries env = do
     putStrLn $ "Loading stdlib from " ++ stdlib ++ "\n"
     evalString env $ "(load  \"" ++ (escapeBackslashes stdlib) ++ "\")"
 
-handleInput :: Env -> String -> IO ()
-handleInput env expr = case expr of
+handleInput :: Config -> Env -> String -> IO ()
+handleInput cfg env expr = case expr of
     ""        -> return ()
-    ':' : cmd -> handleCommand env cmd
+    ':' : cmd -> handleCommand cfg cmd
     _         -> evalAndPrint env expr
 
-handleCommand :: Env -> String -> IO ()
-handleCommand _ _ = return ()
+handleCommand :: Config -> String -> IO ()
+handleCommand cfgRef cmd = case cmd of
+    'p' : args -> do
+        cfg <- liftIO $ readIORef cfgRef
+        writeIORef cfgRef $ ConfigImpl { prompt = strip args ++ " " }
+    cmd : args -> putStrLn $ "Unknown command " ++ [cmd]
 
-readPrompt :: String -> IO String
-readPrompt prompt = flushStr prompt >> getLine
+readPrompt :: Config -> IO String
+readPrompt cfgRef = do
+    cfg <- liftIO $ readIORef cfgRef
+    flushStr (prompt cfg) >> getLine
 
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
@@ -123,3 +140,9 @@ replace s find repl =
 
 lstrip :: String -> String
 lstrip = dropWhile (`elem` " \t")
+
+rstrip :: String -> String
+rstrip = reverse . lstrip . reverse
+
+strip :: String -> String
+strip = lstrip . rstrip
