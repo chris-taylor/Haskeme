@@ -1,5 +1,5 @@
 Name:               haskeme
-Version:            0.1
+Version:            0.2
 Synopsis:           Lisp interpreter
 Description:        A dialect of Lisp written in Haskell.
 License:            OtherLicense
