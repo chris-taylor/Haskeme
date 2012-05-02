@@ -83,7 +83,7 @@ showVal (Port _) = "<IO port>"
 
 -- This is required because Haskell evaluates abs (-0.0) to -0.0, which messes
 -- up the printing of complex values then the imaginary part is negative zero.
-myabs :: Num a => a -> a
+myabs :: (Ord a, Num a) => a -> a
 myabs x | x > 0  = x
         | x == 0 = 0
         | x < 0  = -x
