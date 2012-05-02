@@ -13,6 +13,7 @@ import Language.IOPrimitives
 import Language.Variables
 
 import Paths_haskeme
+import Data.Version (showVersion)
 
 -- Main
 
@@ -44,9 +45,6 @@ loadLibraries env = do
 
 -- IO Functions
 
-versionNum :: String
-versionNum = "0.2"
-
 showHeader :: IO ()
 showHeader = do
     putStrLn $ " _               _"
@@ -55,7 +53,7 @@ showHeader = do
     putStrLn $ "| || | |_| \\__ \\|   \\  __/| | | |  __/"
     putStrLn $ "|_||_|\\__/\\|___/|_|\\_\\___/|_|_|_|\\___/"
     putStrLn $ "   Author: github.com/chris-taylor"
-    putStrLn $ "  Version: " ++ versionNum
+    putStrLn $ "  Version: " ++ showVersion version
 
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
