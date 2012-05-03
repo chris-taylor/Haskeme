@@ -127,6 +127,7 @@ data LispError = NumArgs Integer [LispVal]
                | UnboundVar String String
                | OutOfRange Int (Int, Int) LispVal
                | KeyNotFound LispVal LispVal
+               | FileNotFound String
                | Default String
 
 type ThrowsError = Either LispError
@@ -152,6 +153,7 @@ showError (UnboundVar message varname) = message ++ ": " ++ varname
 showError (OutOfRange n bounds obj) = "Index " ++ show n ++ " out of range "
     ++ show bounds ++ " for object: " ++ show obj
 showError (KeyNotFound key hash) = "Key " ++ show key ++ " not found in hash: " ++ show hash
+showError (FileNotFound filename) = "File not found: " ++ filename
 
 trapError :: (MonadError e m, Show e) => m String -> m String
 trapError action = catchError action (return . show)

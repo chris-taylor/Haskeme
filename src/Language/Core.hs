@@ -248,4 +248,7 @@ bindOne :: Env -> (String, LispVal) -> IOThrowsError Env
 bindOne env (var, val) = liftIO $ bindVars env [(var, val)]
 
 load :: String -> IOThrowsError [LispVal]
-load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
+load filename = do
+    contents <- ErrorT $ (readFile filename >>= return . Right)
+        `catch` (\_ -> return . Left $ FileNotFound filename)
+    liftThrows $ readExprList contents

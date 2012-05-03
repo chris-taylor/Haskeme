@@ -52,6 +52,11 @@
 (def complement (f)
     (fn args (not (apply f args))))
 
+; INC and DEC add or subtract one from their argument
+
+(def inc [+ _ 1])
+(def dec [- _ 1])
+
 ; RFN Generates recursive lambdas by taking an additional parameter to use as
 ; the name of the generated lambda.
 ; AFN Works the same, but automatically binds the symbol `self to the lambda
@@ -166,11 +171,23 @@
         (cons init (unfold func (func init) pred))))
 
 ; MAP1 applies a unary function to each element of xs
+; MAP applies a (possibly multivariate) function element-wise to the functions
+; given in args. If one of the argument lists is shorter than the other, then
+; the longer lists are truncated.
 
-(def map1 (func xs)
-    (if (no xs)
-        '()
-        (cons (func (car xs)) (map1 func (cdr xs)))))
+(def map1 (f xs)
+        (if (no xs)
+            nil
+            (cons (f (car xs)) (map1 f (cdr xs)))))
+
+(def map (func . args)
+    (if (any (map1 null args))
+        nil
+        (cons
+            (apply func (map1 car args))
+            (apply (curry map func) (map1 cdr args)))))
+
+; PAIR Given a list, pairs up the elements in the order the appear in the list
 
 (def pair (xs)
     (if (no xs)
@@ -180,18 +197,15 @@
         (cons (list (car xs) (cadr xs))
               (pair (cddr xs)))))
 
-; MAP applies a function to each element of xs
-; #TODO make this accept multivalent functions
+; ISA Check if the argument matches a given type
 
-(def map (func xs)
-    (foldr (fn (x y) (cons (func x) y)) '() xs))
+(def isa (x y) (is (type x) y))
 
 ; TESTIFY If given a function, return the function. Else return a function that
 ; compares for equality with the argument
 
 (def testify (arg)
-    (if (procedure? arg) arg
-        (fn (x) (is x arg))))
+    (if (procedure? arg) arg [is _ arg]))
 
 ; KEEP returns a list containing only the elements that satisfy the predicate.
 ; REMOVE returns a list without the elements that satisfy the given predicate.
@@ -291,8 +305,8 @@
 
 (macro caselet (var expr . args)
     (let ex (afn (args)
-                (if (no (cdr args))
-                    (car args)
+                (if (no args) 'nil
+                    (no (cdr args)) (car args)
                     `(if (is ,var ',(car args))
                             ,(cadr args)
                             ,(self (cddr args)))))
@@ -313,6 +327,16 @@
     (if (no args) #f
         `(if ,(car args) #t
              (or ,@(cdr args)))))
+
+(macro all (xs)
+    (if (no xs) #t
+        (if (car xs) (all (cdr xs))
+            #f)))
+
+(def any (xs)
+    (if (no xs) #f
+        (if (car xs) #t
+            (any (cdr xs)))))
 
 ; LOOP Executes start, and then runs a recursive program that repeatedly
 ; executes the body and the update step until the test is satisfied.
@@ -370,6 +394,12 @@
 
 (macro let (var val . body)
     `(with (,var ,val) ,@body))
+
+(macro withs (bindings . body)
+    (if (no bindings)
+        `(do ,@body)
+        `(let ,(car bindings) ,(cadr bindings)
+            (withs ,(cddr bindings) ,@body))))
 
 (macro w/uniq (params . body)
     (if (pair? params)
