@@ -175,10 +175,10 @@
 ; given in args. If one of the argument lists is shorter than the other, then
 ; the longer lists are truncated.
 
-(def map1 (func xs)
-    (if (no xs)
-        '()
-        (cons (func (car xs)) (map1 func (cdr xs)))))
+(def map1 (f xs)
+        (if (no xs)
+            nil
+            (cons (f (car xs)) (map1 f (cdr xs)))))
 
 (def map (func . args)
     (if (any (map1 null args))
@@ -197,12 +197,15 @@
         (cons (list (car xs) (cadr xs))
               (pair (cddr xs)))))
 
+; ISA Check if the argument matches a given type
+
+(def isa (x y) (is (type x) y))
+
 ; TESTIFY If given a function, return the function. Else return a function that
 ; compares for equality with the argument
 
 (def testify (arg)
-    (if (procedure? arg) arg
-        (fn (x) (is x arg))))
+    (if (procedure? arg) arg [is _ arg]))
 
 ; KEEP returns a list containing only the elements that satisfy the predicate.
 ; REMOVE returns a list without the elements that satisfy the given predicate.
@@ -302,8 +305,8 @@
 
 (macro caselet (var expr . args)
     (let ex (afn (args)
-                (if (no (cdr args))
-                    (car args)
+                (if (no args) 'nil
+                    (no (cdr args)) (car args)
                     `(if (is ,var ',(car args))
                             ,(cadr args)
                             ,(self (cddr args)))))
@@ -391,6 +394,12 @@
 
 (macro let (var val . body)
     `(with (,var ,val) ,@body))
+
+(macro withs (bindings . body)
+    (if (no bindings)
+        `(do ,@body)
+        `(let ,(car bindings) ,(cadr bindings)
+            (withs ,(cddr bindings) ,@body))))
 
 (macro w/uniq (params . body)
     (if (pair? params)
