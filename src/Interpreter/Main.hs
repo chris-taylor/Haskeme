@@ -87,9 +87,7 @@ handleInput cfg env expr = case expr of
 
 handleCommand :: Config -> String -> IO ()
 handleCommand cfgRef cmd = case cmd of
-    'p' : args -> do
-        cfg <- liftIO $ readIORef cfgRef
-        writeIORef cfgRef $ ConfigImpl { prompt = strip args ++ " " }
+    'p' : args -> writeIORef cfgRef $ ConfigImpl { prompt = strip args ++ " " }
     cmd : args -> putStrLn $ "Unknown command " ++ [cmd]
 
 readPrompt :: Config -> IO String
