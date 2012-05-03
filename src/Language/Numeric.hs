@@ -22,10 +22,12 @@ numType _           = NotANumber
 
 numericPrimitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 numericPrimitives =
-    [ ("integer?", typeCheck isInteger)
-    , ("rational?", typeCheck isRatio)
-    , ("real?", typeCheck isFloat)
-    , ("complex?", typeCheck isComplex)
+    [ ("integer?", numericBoolOp isInteger)
+    , ("rational?", numericBoolOp isRatio)
+    , ("real?", numericBoolOp isFloat)
+    , ("complex?", numericBoolOp isComplex)
+    , ("exact?", numericBoolOp isExact)
+    , ("inexact?", numericBoolOp isInexact)
     , ("==", numericOrdOp (==))
     , ("<", numericOrdOp (<))
     , (">", numericOrdOp (>))
@@ -59,9 +61,12 @@ numericPrimitives =
     , ("as-integer", numericCast toNumber)
     , ("as-rational", numericCast toRatio)
     , ("as-real", numericCast toFloat)
-    , ("as-complex", numericCast toComplex) ]
+    , ("as-complex", numericCast toComplex)
+    , ("as-exact", numericCast toExact)
+    , ("as-inexact", numericCast toInexact) ]
 
--- Coerce Haskell base types (used for type promotion - never lose information)
+-- Coerce Haskell base types. Used for type promotion - never throw away
+-- information.
 
 asComplex :: LispVal -> Complex Double
 asComplex (Number n)  = fromInteger n
@@ -81,20 +86,24 @@ asRatio (Ratio n)  = n
 asNumber :: LispVal -> Integer
 asNumber (Number n) = n
 
-pushDown :: LispVal -> ThrowsError LispVal
-pushDown num@(Complex z) = if imagPart z == 0
-    then pushDown $ Float (realPart z)
-    else return num
-pushDown num@(Float x)   = if isFloatIntegral x
-    then return $ Number $ round x
-    else return num
-pushDown num@(Ratio x)   = if isRatioIntegral x
-    then return $ Number $ numerator x
-    else return num
-pushDown num@(Number n)  = return num
-pushDown other           = throwError $ TypeMismatch "number" other
+_pushDown :: LispVal -> LispVal
+_pushDown num@(Complex z) = if imagPart z == 0
+    then Float $ realPart z
+    else num
+_pushDown num@(Ratio x)   = if denominator x == 1
+    then Number $ numerator x
+    else num
+_pushDown num@(Float _)   = num
+_pushDown num@(Number _)  = num
 
--- Forced coercion within Lisp
+pushDown :: LispVal -> ThrowsError LispVal
+pushDown x = case numType x of
+    NotANumber -> throwError $ TypeMismatch "number" x
+    _          -> return $ _pushDown x
+
+-- Forced coercion within Lisp. These functions may throw away information.
+-- Input comes via the function numericCast, which checks for type mismatches,
+-- so we can assume that the input is always a numeric type.
 
 toComplex :: LispVal -> LispVal
 toComplex = Complex . asComplex
@@ -109,10 +118,16 @@ toRatio (Float n)   = Ratio $ toRational n
 toRatio x           = Ratio $ asRatio x
 
 toNumber :: LispVal -> LispVal
-toNumber (Complex n) = Number $ round $ realPart n
-toNumber (Float n)   = Number $ round n
-toNumber (Ratio n)   = Number $ round $ (fromInteger $ numerator n) / (fromInteger $ denominator n)
-toNumber x           = Number $ asNumber x
+toNumber (Complex n)    = Number $ round $ realPart n
+toNumber (Float n)      = Number $ round n
+toNumber (Ratio n)      = Number $ round $ (fromInteger $ numerator n) / (fromInteger $ denominator n)
+toNumber num@(Number n) = num
+
+toExact :: LispVal -> LispVal
+toExact n = if isExact n then n else _pushDown (toRatio n)
+
+toInexact :: LispVal -> LispVal
+toInexact n = if isExact n then toFloat n else n
 
 numericCast :: (LispVal -> LispVal) -> [LispVal] -> ThrowsError LispVal
 numericCast cast xs  = case xs of
@@ -124,13 +139,9 @@ numericCast cast xs  = case xs of
             NotANumber -> throwError $ TypeMismatch "number" x
             _          -> return (cast x)
 
-isFloatIntegral :: Double -> Bool
-isFloatIntegral x = fracPart == 0 where fracPart = x - fromIntegral (round x)
-
-isRatioIntegral :: Rational -> Bool
-isRatioIntegral x = denominator x == 1
-
--- Type checking
+-- Type checking. Input to these functions is passed via numericBoolOp,
+-- which checks for type mismatches, so we can always assume that we have
+-- a numeric type.
 
 isInteger :: LispVal -> Bool
 isInteger (Number _) = True
@@ -144,14 +155,20 @@ isRatio _          = False
 isFloat :: LispVal -> Bool
 isFloat (Number _) = True
 isFloat (Ratio _)  = True
+isFloat (Float _)  = True
 isFloat _          = False
 
 isComplex :: LispVal -> Bool
-isComplex (Number _)  = True
-isComplex (Ratio _)   = True
-isComplex (Float _)   = True
-isComplex (Complex _) = True
-isComplex _           = False
+isComplex _ = True
+
+isExact :: LispVal -> Bool
+isExact (Number _)  = True
+isExact (Ratio _)   = True
+isExact (Float _)   = False
+isExact (Complex _) = False
+
+isInexact :: LispVal -> Bool
+isInexact = not . isExact
 
 -- Combinators
 
@@ -169,9 +186,11 @@ numericMinus :: [LispVal] -> ThrowsError LispVal
 numericMinus [x] = numericUnOp negate [x]
 numericMinus xs  = numericBinOp (-) xs
 
-typeCheck :: (LispVal -> Bool) -> [LispVal] -> ThrowsError LispVal
-typeCheck p [x] = return $ Bool (p x)
-typeCheck p xs  = throwError $ NumArgs 1 xs
+numericBoolOp :: (LispVal -> Bool) -> [LispVal] -> ThrowsError LispVal
+numericBoolOp p [x] = if numType x == NotANumber
+    then throwError $ TypeMismatch "number" x
+    else return $ Bool (p x)
+numericBoolOp p xs  = throwError $ NumArgs 1 xs
 
 numericBinOp :: (forall a. Num a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
 numericBinOp op params = foldLeft1Error (promoteNumericBinaryOp op) params >>= pushDown
