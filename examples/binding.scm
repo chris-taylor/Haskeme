@@ -1,6 +1,6 @@
 (def (binding-test x)
-    (with ((f x) (+ 1 (g x))
-           (g x) (+ 1 x))
+    (with (f [+ 1 (g _)])
+          (g [+ 1 _])
         (f x)))
 
 (binding-test 1)
