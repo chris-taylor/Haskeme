@@ -1,0 +1,5 @@
+(def sum-of-larger-squares (a b c)
+    (let sos (fn (x y) (+ (* x x) (* y y)))
+        (if (and (< a b) (< a c)) (sos b c)
+            (and (< b c) (< b a)) (sos a c)
+                                  (sos a b))))

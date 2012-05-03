@@ -1,0 +1,11 @@
+(def cbrt (x)
+    (def improve (guess)
+        (/ (+ (* 2 guess)
+              (/ x (* guess guess)))
+            3))
+    (def good-enough (g1 g2)
+        (< (abs (- (/ g1 g2) 1)) 0.0001))
+    (def iter (g1 g2)
+        (if (good-enough g1 g2) g1
+            (iter (improve g1) g1)))
+    (iter 1.0 2.0))
