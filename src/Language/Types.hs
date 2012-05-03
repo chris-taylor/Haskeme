@@ -49,6 +49,9 @@ data LispVal = Atom String
              | IOFunc String ([LispVal] -> IOThrowsError LispVal)
              | Func { params :: [String], vararg :: Maybe String
                     , body :: [LispVal], closure :: Env }
+             | HFunc { hparams :: [String], hvararg :: Maybe String
+                     , hbody :: (Env -> LispVal -> LispVal -> Maybe [LispVal] -> IOThrowsError LispVal)
+                     , hclosure :: Env }
              | Macro { macroParams :: [String], macroVararg :: Maybe String
                      , macroBody :: [LispVal], macroClosure :: Env }
              | Port Handle
