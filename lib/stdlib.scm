@@ -1,4 +1,4 @@
-; Combinations of CAR and CDR.
+;;;; Combinations of CAR and CDR.
 
 (def caar (x) (car (car x)))
 (def cadr (x) (car (cdr x)))
@@ -13,16 +13,37 @@
 (def cddar (x) (cdr (cdar x)))
 (def cdddr (x) (cdr (cddr x)))
 
-; NIL returns the empty list
+;; Fundamental operations
 
 (def nil '())
 
-; Various tests for negatives:
-; NO   returns true only for the empty list
-; NULL returns true for any empty data structure (list, string, vector, hash)
-; NOT  returns the boolean negation of its argument
-
 (def no (obj) (is obj nil))
+
+(def isa (x y) (is (type x) y))
+
+(def isnt (x y) (not (is x y)))
+
+(def id (obj) obj)
+
+(def not (x) (if x #f #t))
+
+(macro and args
+    (if (no args) #t
+        `(if ,(car args) (and ,@(cdr args))
+             #f)))
+
+(macro or args
+    (if (no args) #f
+        `(if ,(car args) #t
+             (or ,@(cdr args)))))
+
+;;;; Fundamental list operations
+
+(def list objs objs)
+
+(def alist (obj)
+    (or (is obj nil)
+        (is (type obj) 'pair)))
 
 (def null (obj)
     (or (is obj nil)
@@ -30,36 +51,103 @@
         (is obj $())
         (is obj #())))
 
-(def not (x)
-    (if x #f #t))
+(def pair (xs)
+    (if (no xs)
+            nil
+        (no (cdr xs))
+            (list (list (car xs)))
+        (cons (list (car xs) (cadr xs))
+              (pair (cddr xs)))))
 
-; LIST returns a list containing all of its arguments
+(def map1 (f xs)
+    (if (no xs)
+        nil
+        (cons (f (car xs)) (map1 f (cdr xs)))))
 
-(def list objs
-    objs)
+(def all (test xs)
+    (let f (testify test)
+        (if (no xs) #t
+            (f (car xs)) (all test (cdr xs))
+            #f)))
 
-(def alist (obj)
-    (or (is obj nil)
-        (is (type obj) 'pair)))
+(def any (test xs)
+    (let f (testify test)
+        (if (no xs) #f
+            (f (car xs)) #t
+            (any test (cdr xs)))))
 
-; ID is the identity function
+(def snoc (x lst)
+    (if (null lst)
+        (list x)
+        (cons (car lst) (snoc x (cdr lst)))))
 
-(def id (obj) obj)
+(def append (a b)
+    (if (null b)
+        a
+        (append (snoc (car b) a) (cdr b))))
 
-; COMPLEMENT returns the boolean complement of a function.
-; The syntax ~func is desugared into (complement func)
+(def take (n xs)
+    (if (is n 0)
+        nil
+        (cons (car xs) (take (- n 1) (cdr xs)))))
 
-(def complement (f)
-    (fn args (not (apply f args))))
+(def drop (n xs)
+    (if (is n 0)
+        xs
+        (drop (- n 1) (cdr xs))))
 
-; INC and DEC add or subtract one from their argument
+(def splitat (n xs)
+    (list (take n xs) (drop n xs)))
 
-(def inc [+ _ 1])
-(def dec [- _ 1])
+(def nthcdr (n xs)
+    (if (is n 0) xs
+        (nthcdr (- n 1) (cdr xs))))
 
-; RFN Generates recursive lambdas by taking an additional parameter to use as
-; the name of the generated lambda.
-; AFN Works the same, but automatically binds the symbol `self to the lambda
+(def tuples (xs n)
+    (if (no xs)
+        nil
+        (cons (take n xs)
+              (tuples (nthcdr n xs) n))))
+
+;;;; Control flow
+
+(macro do args
+    `((fn () ,@args)))
+
+(macro when (test . body)
+    `(if ,test (do ,@body)))
+
+(macro unless (test . body)
+    `(if (not ,test) (do ,@body)))
+
+;;;; Multiple definitions
+
+(macro defs args
+    `(do ,@(map1 [cons 'def _] (pair args))))
+
+;;;; Local bindings
+
+; WITH Creates a new environment, within which each VAR evaluates to the
+; corresponding VAL, and uses this environment to evaluate EXPR
+; LET Short form of WITH that only binds one var, but doesn't need parentheses.
+; WITHS Like with, but binds variables sequentially, so that later params
+; can refer to earlier ones.
+
+(macro with (params . body)
+    `((fn ,(map1 car (pair params))
+          ,@body)
+        ,@(map1 cadr (pair params))))
+
+(macro let (var val . body)
+    `(with (,var ,val) ,@body))
+
+(macro withs (params . body)
+    (if (no params)
+        `(do ,@body)
+        `(let ,(car params) ,(cadr params)
+            (withs ,(cddr params) ,@body))))
+
+;;;; Recursive lambda functions (required for many macros)
 
 (macro rfn (name params . body)
     `(let ,name nil
@@ -69,43 +157,26 @@
     `(let self nil
         (= self (fn ,params ,@body))))
 
-; FLIP returns a function show arguments are flipped as compared to the input
-; function
+;;;; Control flow (case statement and membership testing)
 
-(def flip (func)
-    (fn (x y) (func y x)))
+(macro caselet (var expr . args)
+    (let ex (afn (args)
+                (if (no args) 'nil
+                    (no (cdr args)) (car args)
+                    `(if (is ,var ',(car args))
+                            ,(cadr args)
+                            ,(self (cddr args)))))
+    `(let ,var ,expr ,(ex args))))
 
-; CURRY binds the first argument of a two-argument function. The result is a
-; function of one argument.
+(macro case (expr . args)
+    `(caselet ,(uniq) ,expr ,@args))
 
-(def curry (func x)
-    (fn y (apply func (cons x y))))
+(macro in (x . xs)
+    (w/uniq g
+        `(let ,g ,x
+            (or ,@(map1 (fn (c) `(is ,g ,c)) xs)))))
 
-; UNCURRY accepts a function that returns another function when given an
-; argument, and returns a function that can be called on all parameters at once.
-
-(def uncurry (func)
-    (fn (x . rest) (apply (func x) rest)))
-
-; COMPOSE is function composition - the result is a function which applies g,
-; then applies f.
-
-(def compose (f g)
-    (fn (x) (f (g x))))
-
-;;;; Numeric functions
-
-(def zero [== _ 0])
-
-(def positive [> _ 0])
-
-(def negative [< _ 0])
-
-(def odd [== (mod _ 2) 1])
-
-(def even [== (mod _ 2) 0])
-
-;;;; Higher-order functions
+;;;; Folds and scans
 
 ; FOLDR and FOLDL perform left and right folds with an initial value
 ; FOLDR1 and FOLDL1 use the car of the list as the initial value
@@ -133,9 +204,157 @@
 (def fold1 foldl1)
 (def reduce1 fold1)
 
-; SCANR and SCANL perform as fold, but return a list of the intermediate results.
-; SCANR1 and SCANL1 use the car of the lst as the initial value
-; SCAN is a synonym for SCANL
+; More list manipulation
+
+(def replicate (n val)
+    (if (is n 0) '()
+        (cons val (replicate (- n 1) val))))
+
+(def make-vector (n val)
+    (apply vector (replicate n val)))
+
+(def xrange (a b)
+    (if (>= a b) '()
+        (cons a (xrange (+ 1 a) b))))
+
+(def range (a . b)
+    (if (no b)
+        (xrange 0 a)
+        (xrange a (car b))))
+
+(def join args
+    (foldr append '() args))
+
+; W/UNIQ Binds a unique symbol name to each PARAMS (useful in macros)
+
+(macro w/uniq (params . body)
+    (if (pair? params)
+        `(with ,(apply join (map1 (fn (n) (list n '(uniq)))
+                                params))
+            ,@body)
+        `(let ,params (uniq) ,@body)))
+
+;;; Control flow (loops)
+
+(macro while (test . body)
+    (w/uniq gp
+        `((afn (,gp)
+            (when ,gp ,@body (self ,test)))
+          ,test)))
+
+(macro loop (start test update . body)
+    (w/uniq gparm
+        `(do ,start
+            ((afn (,gparm)
+                (if ,gparm
+                    (do ,@body ,update (self ,test))))
+            ,test))))
+
+(macro for (v init max . body)
+    (w/uniq (gi gm)
+        `(with (,v nil ,gi ,init ,gm (+ ,max 1))
+            (loop (= ,v ,gi) (< ,v ,gm) (++ ,v)
+                ,@body))))
+
+(macro forlen (var s . body)
+    `(for ,var 0 (- (len ,s) 1) ,@body))
+
+(def walk (seq func)
+    (if (alist seq)
+            ((afn (l)
+                (when (pair? l)
+                    (func (car l))
+                    (self (cdr l)))) seq)
+        ; else
+        (forlen i seq
+            (func (seq i)))))
+
+(macro each (x xs . body)
+    `(walk ,xs (fn (,x) ,@body)))
+
+(macro repeat (n . body)
+    `(for i 1 ,n ,@body))
+
+;;;; Higher order functions
+
+(def complement (f)
+    (fn args (not (apply f args))))
+
+(def flip (f)
+    (fn (x y) (f y x)))
+
+(def curry (func x)
+    (fn y (apply func (cons x y))))
+
+(def uncurry (func)
+    (fn (x . rest) (apply (func x) rest)))
+
+(macro compose args
+    (let g (uniq)
+        `(fn ,g
+            ,((afn (fs)
+                (if (cdr fs)
+                    (list (car fs) (self (cdr fs)))
+                    `(apply ,(if (car fs) (car fs) 'id) ,g)))
+              args))))
+
+(def applyn (n f)
+    (if (is n 0)
+        id
+        (fn (x)
+            (f ((applyn (- n 1) f) x)))))
+
+;;;; Definition of map in terms of map1
+
+(def map (func . args)
+    (if (any null args) nil
+        (cons
+            (apply func (map1 car args))
+            (apply (curry map func) (map1 cdr args)))))
+
+;;;; Numeric functions
+
+(def zero [== _ 0])
+(def positive [> _ 0])
+(def negative [< _ 0])
+(def odd [== (mod _ 2) 1])
+(def even [== (mod _ 2) 0])
+
+(def inc [+ _ 1])
+(def dec [- _ 1])
+
+(def sum (lst) (fold + 0 lst))
+(def product (lst) (fold * 1 lst))
+
+(def max (first . rest)
+    (fold (fn (old new) (if (> old new) old new))
+        first rest))
+
+(def min (first . rest)
+    (fold (fn (old new) (if (< old new) old new))
+        first rest))
+
+;;;; Polymorphic fold (works on lists, vectors, strings)
+
+(def pfold_ (foldfunc f xs)
+    (let init (case (type xs)
+                pair '()
+                vector $()
+                string "")
+        (foldfunc f init xs)))
+
+(def pfoldr (curry pfold_ foldr))
+(def pfoldl (curry pfold_ foldl))
+(def pfold pfoldl)
+
+;;;; Unfold
+
+(def unfold (func init pred)
+    (if (pred init)
+        (cons init '())
+        (cons init (unfold func (func init) pred))))
+
+;;;; Scans (like folds, but keep the list of intermediate results)
 
 (def scanr (func end lst)
     (if (null lst)
@@ -161,54 +380,10 @@
 (def scan scanl)
 (def scan1 scanl1)
 
-; UNFOLD takes an initial value and an argument, and keeps applying the function
-; to previous result until the predicate is satisfied. It returns a list of
-; all result generated.
-
-(def unfold (func init pred)
-    (if (pred init)
-        (cons init '())
-        (cons init (unfold func (func init) pred))))
-
-; MAP1 applies a unary function to each element of xs
-; MAP applies a (possibly multivariate) function element-wise to the functions
-; given in args. If one of the argument lists is shorter than the other, then
-; the longer lists are truncated.
-
-(def map1 (f xs)
-        (if (no xs)
-            nil
-            (cons (f (car xs)) (map1 f (cdr xs)))))
-
-(def map (func . args)
-    (if (any (map1 null args))
-        nil
-        (cons
-            (apply func (map1 car args))
-            (apply (curry map func) (map1 cdr args)))))
-
-; PAIR Given a list, pairs up the elements in the order the appear in the list
-
-(def pair (xs)
-    (if (no xs)
-            nil
-        (no (cdr xs)) 
-            (list (list (car xs)))
-        (cons (list (car xs) (cadr xs))
-              (pair (cddr xs)))))
-
-; ISA Check if the argument matches a given type
-
-(def isa (x y) (is (type x) y))
-
-; TESTIFY If given a function, return the function. Else return a function that
-; compares for equality with the argument
+;;;; List filtering operations
 
 (def testify (arg)
     (if (procedure? arg) arg [is _ arg]))
-
-; KEEP returns a list containing only the elements that satisfy the predicate.
-; REMOVE returns a list without the elements that satisfy the given predicate.
 
 (def keep (pred lst)
     (let test (testify pred)
@@ -220,208 +395,22 @@
 (def remove (pred lst)
     (keep (complement (testify pred)) lst))
 
-; SUM and PRODUCT of a list of numbers.
+;;;; More list manipulation
 
-(def sum (lst) (fold + 0 lst))
+(def reverse (x)
+    (pfold (flip cons) x))
 
-(def product (lst) (fold * 1 lst))
+;;;; Association Lists
 
-; MAX and MIN return the maximum/minimum of their arguments.
+(def zip args
+    (if (any null args) '()
+        (cons
+            (map1 car args)
+            (apply zip (map1 cdr args)))))
 
-(def max (first . rest)
-    (fold (fn (old new)
-        (if (> old new) old new)) first rest))
+(def unzip (lst) (apply zip lst))
 
-(def min (first . rest)
-    (fold (fn (old new)
-        (if (< old new) old new)) first rest))
-
-; REVERSE returns a list containing the elements of its input list, with
-; order reversed.
-
-(def reverse (lst)
-    (fold (flip cons) '() lst))
-
-; REPLICATE creates a list containing n copies of val.
-
-(def replicate (n val)
-    (if (is n 0) '()
-        (cons val (replicate (- n 1) val))))
-
-; MAKE-VECTOR is the same as REPLICATE, but returns a vector instead of a list.
-
-(def make-vector (n val)
-    (apply vector (replicate n val)))
-
-; XRANGE returns the numbers [a, a+1 ... b-2, b-1]
-; RANGE is a variant whose second argument is optional - when only one argument
-; is given, it returns [0, 1 ... a-2, a-1]
-
-(def xrange (a b)
-    (if (>= a b) '()
-        (cons a (xrange (+ 1 a) b))))
-
-(def range (a . b)
-    (if (no b)
-        (xrange 0 a)
-        (xrange a (car b))))
-
-; SNOC is like cons, but appends elements to the end of a list, string or vector
-; rather than the start
-
-(def snoc (x lst)
-    (if (null lst)
-        (list x)
-        (cons (car lst) (snoc x (cdr lst)))))
-
-; APPEND appends the list, string or vector b to the end of a
-
-(def append (a b)
-    (if (null b)
-        a
-        (append (snoc (car b) a) (cdr b))))
-
-(def join args
-    (foldr append '() args))
-
-;;;; CONTROL FLOW
-
-; DO performs its actions in sequence
-
-(macro do args
-    `((fn () ,@args)))
-
-; WHEN executes a list of statements only if the test returns a non-false value
-; UNLESS executes the statements only if the test returns false
-
-(macro when (test . body)
-    `(if ,test (do ,@body)))
-
-(macro unless (test . body)
-    `(if (not ,test) (do ,@body)))
-
-; CASE evaluates its first argument. It then walks down the key/value pairs
-; to compare for equality with the keys, returning the value of the first match.
-
-(macro caselet (var expr . args)
-    (let ex (afn (args)
-                (if (no args) 'nil
-                    (no (cdr args)) (car args)
-                    `(if (is ,var ',(car args))
-                            ,(cadr args)
-                            ,(self (cddr args)))))
-    `(let ,var ,expr ,(ex args))))
-
-(macro case (expr . args)
-    `(caselet ,(uniq) ,expr ,@args))
-
-; AND returns true if all its arguments are true, else it returns false
-; OR returns true if at least one of its arguments is true
-
-(macro and args
-    (if (no args) #t
-        `(if ,(car args) (and ,@(cdr args))
-             #f)))
-
-(macro or args
-    (if (no args) #f
-        `(if ,(car args) #t
-             (or ,@(cdr args)))))
-
-(macro all (xs)
-    (if (no xs) #t
-        (if (car xs) (all (cdr xs))
-            #f)))
-
-(def any (xs)
-    (if (no xs) #f
-        (if (car xs) #t
-            (any (cdr xs)))))
-
-; LOOP Executes start, and then runs a recursive program that repeatedly
-; executes the body and the update step until the test is satisfied.
-
-(macro loop (start test update . body)
-    (w/uniq gparm
-        `(do ,start
-            ((afn (,gparm)
-                (if ,gparm
-                    (do ,@body ,update (self ,test))))
-            ,test))))
-
-; FOR binds the variable v to init, and on every step it increments v by 1 and
-; executes the body, until v exceeds max.
-
-(macro for (v init max . body)
-    (w/uniq (gi gm)
-        `(with (,v nil ,gi ,init ,gm (+ ,max 1))
-            (loop (= ,v ,gi) (< ,v ,gm) (++ ,v)
-                ,@body))))
-
-(macro forlen (var s . body)
-    `(for ,var 0 (- (len ,s) 1) ,@body))
-
-; EACH binds the variable x to each element of xs, and executes the body.
-
-(def walk (seq func)
-    (if (alist seq)
-        ((afn (l)
-            (when (pair? l)
-                (func (car l))
-                (self (cdr l)))) seq)
-        ; else
-        (forlen i seq
-            (func (seq i)))))
-
-(macro each (x xs . body)
-    `(walk ,xs (fn (,x) ,@body)))
-
-; REPEAT executes a block of code n times, returning the final value
-
-(macro repeat (n . body)
-    `(for i 1 ,n ,@body))
-
-;;;; LOCAL BINDINGS
-
-; WITH Creates a new environment, within which each VAR evaluates to the
-; corresponding VAL, and uses this environment to evaluate EXPR
-; LET Short form of WITH that only binds one var, but doesn't need parentheses.
-
-(macro with (bindings . body)
-    `((fn ,(map1 car (pair bindings))
-          ,@body)
-        ,@(map1 cadr (pair bindings))))
-
-(macro let (var val . body)
-    `(with (,var ,val) ,@body))
-
-(macro withs (bindings . body)
-    (if (no bindings)
-        `(do ,@body)
-        `(let ,(car bindings) ,(cadr bindings)
-            (withs ,(cddr bindings) ,@body))))
-
-(macro w/uniq (params . body)
-    (if (pair? params)
-        `(with ,(apply join (map (fn (n) (list n '(uniq)))
-                                params))
-            ,@body)
-        `(let ,params (uniq) ,@body)))
-
-;;;; EQUALITY TESTING
-
-; IN tests if its first argument is equal (in the sense of IS) to any if its
-; later arguments
-
-(macro in (x . xs)
-    (w/uniq g
-        `(let ,g ,x
-            (or ,@(map1 (fn (c) `(is ,g ,c)) xs)))))
-
-;;;; ASSIGNMENT
-
-; ZAP modifies X to have the value obtained by applying func to X. Again, it
-; can modify values inside structures.
+;;;; Assignment and modification
 
 (macro zap (func x)
     (w/uniq result
@@ -429,21 +418,8 @@
             (do (= ,x ,result)
                 ,result))))
 
-; INCREMENT (++) and DECREMENT (--)
-; These modify their argument, and return the modified result.
-; As with PUSH and POP, ++ and -- are implemented using =, so they can reach
-; inside structures.
-
 (macro ++ (x) `(zap [+ _ 1] ,x))
-
 (macro -- (x) `(zap [- _ 1] ,x))
-
-; PUSH and POP treat a list as a stack, appending or removing elements from
-; the front. Because they are implemented using =, you get the same
-; flexibility as with =, so you can write:
-;   haskeme> (def x '(1 3 4)) ==> (1 3 4)
-;   haskeme> (push 2 (cdr x)) ==> 'ok
-;   haskeme> x                ==> (1 2 3 4)
 
 (macro pop (lst)
     (w/uniq elem
@@ -452,5 +428,4 @@
                 ,elem))))
 
 (macro push (val lst)
-    `(do (= ,lst (cons ,val ,lst))
-         'ok))
+    `(= ,lst (cons ,val ,lst)))
