@@ -314,6 +314,9 @@
 
 ;;;; Numeric functions
 
+(def pi (* 4 (atan 1)))
+(def e (exp 1))
+
 (def zero [== _ 0])
 (def positive [> _ 0])
 (def negative [< _ 0])
