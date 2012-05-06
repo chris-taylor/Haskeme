@@ -12,7 +12,7 @@ module Language.Types (
     , ThrowsError
     , IOThrowsError
     , showVal, nil, eqv, unwordsList, pairs, unpairs, truthVal
-    , trapError, extractValue, liftThrows, runIOThrows
+    , trapError, extractValue, liftThrows, runIOThrows, runIOThrowsCompile
     ) where
 
 import IO
@@ -160,13 +160,24 @@ trapError action = catchError action (return . show)
 
 extractValue :: ThrowsError a -> a
 extractValue (Right val) = val
+extractValue (Left err)  = error "Unexpected error in extractValue"
 
 liftThrows :: ThrowsError a -> IOThrowsError a
 liftThrows (Left err)  = throwError err
 liftThrows (Right val) = return val
 
+-- Execute an IO action and return a result
+-- Intended for use in contexts where a result is always required
 runIOThrows :: IOThrowsError String -> IO String
 runIOThrows action = runErrorT (trapError action) >>= return . extractValue
+
+-- Execute an IO action, returning Nothing if no error is thrown
+runIOThrowsCompile :: IOThrowsError String -> IO (Maybe String)
+runIOThrowsCompile action = do
+    runState <- runErrorT action
+    case runState of
+        Left err -> return $ Just (show err)
+        Right _  -> return Nothing
 
 -- These guys are here for debugging - it allows me to derive an instance for
 -- LispVal that will show me the underlying Haskell representation rather than

@@ -3,10 +3,11 @@ module Main where
 import System
 import System.IO
 import System.Console.GetOpt
+import Control.Monad.Error
 
 import Language.Compiler
 import Language.Types
---import Language.Variables
+import Language.Variables (nullEnv)
 --import qualified Language.Core as Core
 
 import Paths_haskeme
@@ -36,8 +37,8 @@ showWarning = do
 process :: FilePath -> FilePath -> IO ()
 process inFile outFile = do
     env <- liftIO nullEnv
-    lib <- getDateFileName "lib/stdlib.scm"
-    result <- runIOThrows $ liftM show $ compileSchemeFile env lib inFile
+    lib <- getDataFileName "lib/stdlib.scm"
+    result <- runIOThrowsCompile $ liftM show $ compileSchemeFile env lib inFile
     case result of
         Just errMsg -> putStrLn errMsg
         _ -> compileHaskellFile outFile

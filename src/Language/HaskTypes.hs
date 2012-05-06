@@ -1,4 +1,11 @@
+{-# LANGUAGE NoMonomorphismRestriction #-}
+
 module Language.HaskTypes where
+
+import Ratio
+import Complex
+
+import Language.Types
 
 -- Haskell AST
 
@@ -9,13 +16,13 @@ data HaskAST = AstAssignM String HaskAST
              | AstValue String
 
 instance Show HaskAST where
-    show = showValAST
+    show = showValAst
 
 showValAst :: HaskAST -> String
 showValAst (AstAssignM var val) = "  " ++ var ++ " <- " ++ show val
 showValAst (AstFunction name args code) = do
     let header = "\n" ++ name ++ args ++ "= do "
-    let body = unwords . map (\x -> "\n" ++ x) $ map showValAST code
+    let body = unwords . map (\x -> "\n" ++ x) $ map showValAst code
     header ++ body
 showValAst (AstValue v) = v
 
@@ -28,7 +35,7 @@ toHaskString (Atom a) = "Atom " ++ show a
 toHaskString (Number n) = "Number (" ++ show n ++ ")"
 toHaskString (Complex c) = "Complex $ (" ++ show (realPart c) ++ ") :+ (" ++
     show (imagPart c) ++ ")"
-toHaskString (Rational r) = "Rational $ (" ++ show (numerator r) ++ ") % (" ++
+toHaskString (Ratio r) = "Rational $ (" ++ show (numerator r) ++ ") % (" ++
     show (denominator r) ++ ")"
 toHaskString (Float f) = "Float (" ++ show f ++ ")"
 toHaskString (Bool True) = "Bool True"
