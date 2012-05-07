@@ -37,6 +37,20 @@
         `(if ,(car args) #t
              (or ,@(cdr args)))))
 
+;;;; Type checking
+
+(def symbol? (x)    (isa x 'symbol))
+(def pair? (x)      (isa x 'pair))
+(def boolean? (x)   (isa x 'boolean))
+(def char? (x)      (isa x 'char))
+(def string? (x)    (isa x 'string))
+(def number? (x)    (isa x 'number))
+(def vector? (x)    (isa x 'vector))
+(def hash? (x))     (isa x 'hash))
+(def procedure? (x) (isa x 'procedure))
+(def macro? (x)     (isa x 'macro))
+(def port? (x)      (isa x 'port))
+
 ;;;; Fundamental list operations
 
 (def list objs objs)

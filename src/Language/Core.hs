@@ -1,6 +1,7 @@
-module Language.Core (eval, apply, meval, load) where
+module Language.Core (eval, meval, apply, load) where
 
 import Control.Monad.Error
+import System.Directory (doesFileExist)
 import Data.Array
 import Data.IORef
 import qualified Data.Map as Map
@@ -249,6 +250,7 @@ bindOne env (var, val) = liftIO $ bindVars env [(var, val)]
 
 load :: String -> IOThrowsError [LispVal]
 load filename = do
-    contents <- ErrorT $ (readFile filename >>= return . Right)
-        `catch` (\_ -> return . Left $ FileNotFound filename)
-    liftThrows $ readExprList contents
+    result <- liftIO $ doesFileExist filename
+    if result
+      then (liftIO $ readFile filename) >>= liftThrows . readExprList
+      else throwError $ FileNotFound filename

@@ -11,7 +11,7 @@ module Language.Types (
     , Var
     , ThrowsError
     , IOThrowsError
-    , showVal, nil, eqv, unwordsList, pairs, unpairs, truthVal
+    , showVal, nil, eqv, unwordsList, pairs, unpairs, truthVal, typeName
     , trapError, extractValue, liftThrows, runIOThrows, runIOThrowsCompile
     ) where
 
@@ -102,6 +102,30 @@ showFunc name args varargs = "(" ++ name ++ " " ++
             Just arg -> " . " ++ arg) ++ ")"
     ) ++ " ...)"
 
+-- Names for each of the types
+
+typeName :: LispVal -> String
+typeName (Atom _)            = "symbol"
+typeName (List [])           = "nil"
+typeName (List _)            = "pair"
+typeName (DottedList _ _)    = "pair"
+typeName (Vector _)          = "vector"
+typeName (Hash _)            = "hash"
+typeName (Number _)          = "number"
+typeName (Ratio _)           = "number"
+typeName (Float _)           = "number"
+typeName (Complex _)         = "number"
+typeName (Char _)            = "char"
+typeName (String _)          = "string"
+typeName (Bool _)            = "boolean"
+typeName (PrimitiveFunc _ _) = "procedure"
+typeName (IOFunc _ _)        = "procedure"
+typeName (Func {})           = "procedure"
+typeName (Macro {})          = "macro"
+typeName (Port _)            = "port"
+
+-- Helper functions
+
 nil :: LispVal
 nil = List []
 
@@ -138,7 +162,7 @@ instance Show LispError where
     show = showError
 
 instance Error LispError where
-    noMsg  = Default "An error has occured"
+    noMsg  = Default "An internal error has occured"
     strMsg = Default
 
 showError :: LispError -> String
@@ -154,6 +178,7 @@ showError (OutOfRange n bounds obj) = "Index " ++ show n ++ " out of range "
     ++ show bounds ++ " for object: " ++ show obj
 showError (KeyNotFound key hash) = "Key " ++ show key ++ " not found in hash: " ++ show hash
 showError (FileNotFound filename) = "File not found: " ++ filename
+showError (Default msg) = "Internal error: " ++ msg
 
 trapError :: (MonadError e m, Show e) => m String -> m String
 trapError action = catchError action (return . show)

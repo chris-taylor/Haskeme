@@ -13,25 +13,12 @@ import Language.Types
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = numericPrimitives ++ 
-             [ ("symbol?", unaryBoolOp isSymbol)
-             , ("pair?", unaryBoolOp isPair)
-             , ("boolean?", unaryBoolOp isBool)
-             , ("char?", unaryBoolOp isChar)
-             , ("string?", unaryBoolOp isString)
-             , ("number?", unaryBoolOp isNumber)
-             , ("vector?", unaryBoolOp isVector)
-             , ("hash?", unaryBoolOp isHash)
-             , ("procedure?", unaryBoolOp isProcedure)
-             , ("macro?", unaryBoolOp isMacro)
-             , ("port?", unaryBoolOp isPort)
-             , ("type", typeOf)
-             , ("&&", boolBoolBinop (&&))
-             , ("||", boolBoolBinop (||))
-             , ("string=?", strBoolBinop (==))
-             , ("string<?", strBoolBinop (<))
-             , ("string>?", strBoolBinop (>))
-             , ("string<=?", strBoolBinop (<=))
-             , ("string>=?", strBoolBinop (>=))
+             [ ("type", typeOf)
+             , ("str==", strBoolBinop (==))
+             , ("str<", strBoolBinop (<))
+             , ("str>", strBoolBinop (>))
+             , ("str<=", strBoolBinop (<=))
+             , ("str>=", strBoolBinop (>=))
              , ("vector", vector)
              , ("hash", hash)
              , ("keys", unaryOp keys)
@@ -52,27 +39,8 @@ primitives = numericPrimitives ++
 typeOf :: [LispVal] -> ThrowsError LispVal
 typeOf xs = case xs of
     [ ] -> throwError $ NumArgs 1 xs
-    [x] -> return $ t x
-    xs  -> return $ List $ map t xs
-    where
-        t (Atom _) = Atom "symbol"
-        t (List []) = Atom "nil"
-        t (List _) = Atom "pair"
-        t (DottedList _ _) = Atom "pair"
-        t (Vector _) = Atom "vector"
-        t (Hash _) = Atom "hash"
-        t (Number _) = Atom "number"
-        t (Ratio _) = Atom "number"
-        t (Float _) = Atom "number"
-        t (Complex _) = Atom "number"
-        t (Char _) = Atom "char"
-        t (String _) = Atom "string"
-        t (Bool _) = Atom "boolean"
-        t (PrimitiveFunc _ _) = Atom "procedure"
-        t (IOFunc _ _) = Atom "procedure"
-        t (Func {}) = Atom "procedure"
-        t (Macro {}) = Atom "macro"
-        t (Port _) = Atom "port"
+    [x] -> return $ Atom $ typeName x
+    xs  -> return $ List $ map (Atom . typeName) xs
 
 unaryOp :: (LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
 unaryOp op [x]   = op x
