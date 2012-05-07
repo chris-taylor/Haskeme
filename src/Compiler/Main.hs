@@ -45,11 +45,11 @@ process inFile outFile = do
 
 compileSchemeFile :: Env -> FilePath -> FilePath -> IOThrowsError LispVal
 compileSchemeFile env stdlibFile inFile = do
-    libC <- compileLisp env stdlibFile "run" (Just "exec")
+    --libC <- compileLisp env stdlibFile "run" (Just "exec")
     exec <- compileLisp env inFile "exec" Nothing
     outH <- liftIO $ openFile "_tmp.hs" WriteMode
     _ <- liftIO $ writeList outH header
-    _ <- liftIO $ writeList outH $ map show libC
+    --_ <- liftIO $ writeList outH $ map show libC
     _ <- liftIO $ writeList outH $ map show exec
     _ <- liftIO $ hClose outH
     if not (null exec)

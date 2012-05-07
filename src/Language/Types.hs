@@ -55,6 +55,7 @@ data LispVal = Atom String
              | Macro { macroParams :: [String], macroVararg :: Maybe String
                      , macroBody :: [LispVal], macroClosure :: Env }
              | Port Handle
+             | Nil
 
 instance Show LispVal where
     show = showVal
