@@ -30,7 +30,6 @@ Library
                         Language.Core
                         Language.Numeric
                         Language.Parser
-                        Language.IOPrimitives
                         Language.Primitives
                         Language.HaskTypes
                         Language.Compiler
