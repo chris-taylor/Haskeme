@@ -46,7 +46,7 @@
 (def string? (x)    (isa x 'string))
 (def number? (x)    (isa x 'number))
 (def vector? (x)    (isa x 'vector))
-(def hash? (x))     (isa x 'hash))
+(def hash? (x)      (isa x 'hash))
 (def procedure? (x) (isa x 'procedure))
 (def macro? (x)     (isa x 'macro))
 (def port? (x)      (isa x 'port))
