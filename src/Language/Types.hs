@@ -11,7 +11,7 @@ module Language.Types (
     , Var
     , ThrowsError
     , IOThrowsError
-    , showVal, nil, eqv, unwordsList, pairs, unpairs, truthVal, typeName
+    , showVal, nil, eqv, unwordsList, pairs, unpairs, truthVal, typeName, nullEnv
     , trapError, extractValue, liftThrows, runIOThrows, runIOThrowsCompile
     ) where
 
@@ -28,10 +28,13 @@ type Namespace = String
 type Var = String
 
 type EnvType = Map.Map (Namespace, Var) (IORef LispVal)
+type Env = IORef EnvType
+
+nullEnv :: IO Env
+nullEnv = newIORef Map.empty
+
 type VectorType = Array Int LispVal
 type HashType = Map.Map LispVal LispVal
-
-type Env = IORef EnvType
 
 data LispVal = Atom String
              | List [LispVal]
@@ -50,7 +53,7 @@ data LispVal = Atom String
              | Func { params :: [String], vararg :: Maybe String
                     , body :: [LispVal], closure :: Env }
              | HFunc { hparams :: [String], hvararg :: Maybe String
-                     , hbody :: (Env -> LispVal -> LispVal -> Maybe [LispVal] -> IOThrowsError LispVal)
+                     , hbody :: (Env -> LispVal -> Maybe [LispVal] -> IOThrowsError LispVal)
                      , hclosure :: Env }
              | Macro { macroParams :: [String], macroVararg :: Maybe String
                      , macroBody :: [LispVal], macroClosure :: Env }
@@ -81,9 +84,11 @@ showVal (Vector arr) = "$(" ++ unwordsList (elems arr) ++ ")"
 showVal (Hash hash) = "#(" ++ unwordsList (unpairs $ zip (Map.keys hash) (Map.elems hash)) ++ ")"
 showVal (PrimitiveFunc name _) = "<primitive:" ++ name ++ ">"
 showVal (IOFunc name _) = "<ioPrimitive:" ++ name ++ ">"
+showVal (HFunc _ _ _ _) = "<haskellFunction>"
 showVal (Func { params = args, vararg = varargs }) = showFunc "fn" args varargs
 showVal (Macro { macroParams = args, macroVararg = varargs }) = showFunc "macro" args varargs
 showVal (Port _) = "<IO port>"
+showval (Nil) = "<nil>"
 
 -- This is required because Haskell evaluates abs (-0.0) to -0.0, which messes
 -- up the printing of complex values then the imaginary part is negative zero.

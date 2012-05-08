@@ -7,9 +7,6 @@ import Control.Monad.Error
 
 import Language.Types
 
-nullEnv :: IO Env
-nullEnv = newIORef Map.empty
-
 varNamespace = "v"
 macroNamespace = "m"
 

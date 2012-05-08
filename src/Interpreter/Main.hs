@@ -10,7 +10,6 @@ import Language.Core
 import Language.Types
 import Language.Parser
 import Language.Primitives
-import Language.IOPrimitives
 import Language.Variables
 
 import Paths_haskeme
@@ -109,13 +108,6 @@ evalString env expr = evalExpr env expr >> return ()
 evalExpr :: Env -> String -> IO String
 evalExpr env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>=
     meval env >>= eval env
-
--- Environments
-
-primitiveBindings :: IO Env
-primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc IOFunc) ioPrimitives
-                                              ++ map (makeFunc PrimitiveFunc) primitives)
-    where makeFunc constructor (var, func) = (var, constructor var func)
 
 -- Utility functions
 
