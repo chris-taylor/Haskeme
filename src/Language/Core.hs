@@ -200,6 +200,7 @@ apply (PrimitiveFunc _ func) args = liftThrows $ func args
 apply (IOFunc _ func) args        = func args
 apply (Func  params varargs body closure) args = applyFunc params varargs body closure args
 apply (Macro params varargs body closure) args = applyFunc params varargs body closure args
+apply (HFunc params varargs body closure) args = applyHFunc params varargs body closure args
 apply (String str) args = applyString str args
 apply (Vector arr) args = applyVector arr args
 apply (Hash hash) args  = applyHash hash args
@@ -215,8 +216,21 @@ applyFunc params varargs body closure args =
         num = toInteger . length
         evalBody env = liftM last $ mapM (expandThenEval env) body
         bindVarArgs arg env = case arg of
-            Just argName -> liftIO $ bindVars env [(argName, List $ remainingArgs)]
-            Nothing -> return env
+            Just argName -> liftIO $ bindVars env [ (argName, List $ remainingArgs) ]
+            Nothing      -> return env
+
+applyHFunc :: [String] -> Maybe String -> (Env -> LispVal -> Maybe [LispVal] -> IOThrowsError LispVal) -> Env -> [LispVal] -> IOThrowsError LispVal
+applyHFunc params varargs body closure args = 
+    if num params /= num args && varargs == Nothing
+        then throwError $ NumArgs (num params) args
+        else (liftIO $ bindVars closure $ zip params args) >>= bindVarArgs varargs >>= (evalBody body)
+    where
+        remainingArgs = drop (length params) args
+        num = toInteger . length
+        evalBody body env = body env Nil Nothing
+        bindVarArgs arg env = case arg of
+            Just argName -> liftIO $ bindVars env [ (argName, List $ remainingArgs) ]
+            Nothing      -> return env
 
 applyString :: String -> [LispVal] -> IOThrowsError LispVal
 applyString str [Number n] = let index = fromInteger n in
