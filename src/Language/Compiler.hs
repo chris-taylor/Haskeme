@@ -129,7 +129,7 @@ mcompile env lisp copts = mfunc compile env lisp copts
 
 mfunc :: (Env -> LispVal -> CompOpts -> IOThrowsError [HaskAST]) -> Env -> LispVal -> CompOpts -> IOThrowsError [HaskAST]
 mfunc func env lisp copts = do
-    transformed <- meval env lisp
+    transformed <- macroExpand env lisp
     func env transformed copts
 
 compileScalar :: String -> CompOpts -> IOThrowsError [HaskAST]

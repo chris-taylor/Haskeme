@@ -11,7 +11,7 @@ module Language.Types (
     , Var
     , ThrowsError
     , IOThrowsError
-    , showVal, nil, eqv, unwordsList, pairs, unpairs, truthVal, typeName, nullEnv
+    , showVal, nil, eqv, unwordsList, pairs, unpairs, truthVal, typeName, errorName, nullEnv
     , trapError, extractValue, liftThrows, runIOThrows, runIOThrowsCompile
     ) where
 
@@ -58,6 +58,7 @@ data LispVal = Atom String
              | Macro { macroParams :: [String], macroVararg :: Maybe String
                      , macroBody :: [LispVal], macroClosure :: Env }
              | Port Handle
+             | Exception LispError
              | Nil
 
 instance Show LispVal where
@@ -88,6 +89,7 @@ showVal (HFunc _ _ _ _) = "<haskellFunction>"
 showVal (Func { params = args, vararg = varargs }) = showFunc "fn" args varargs
 showVal (Macro { macroParams = args, macroVararg = varargs }) = showFunc "macro" args varargs
 showVal (Port _) = "<IO port>"
+showVal (Exception e) = "<exception:" ++ errorName e ++ ">"
 showval (Nil) = "<nil>"
 
 -- This is required because Haskell evaluates abs (-0.0) to -0.0, which messes
@@ -128,6 +130,7 @@ typeName (PrimitiveFunc _ _) = "procedure"
 typeName (IOFunc _ _)        = "procedure"
 typeName (Func {})           = "procedure"
 typeName (Macro {})          = "macro"
+typeName (Exception _)       = "exception"
 typeName (Port _)            = "port"
 
 -- Helper functions
@@ -158,6 +161,7 @@ data LispError = NumArgs Integer [LispVal]
                | OutOfRange Int (Int, Int) LispVal
                | KeyNotFound LispVal LispVal
                | FileNotFound String
+               | UserError String [LispVal]
                | Default String
 
 type ThrowsError = Either LispError
@@ -171,20 +175,34 @@ instance Error LispError where
     noMsg  = Default "An internal error has occured"
     strMsg = Default
 
+errorName :: LispError -> String
+errorName (NumArgs _ _)         = "numargs"
+errorName (Parser _)            = "parseerror"
+errorName (BadSpecialForm _ _)  = "badspecialform"
+errorName (NotFunction _ _)     = "notfunction"
+errorName (TypeMismatch _ _)    = "typemismatch"
+errorName (UnboundVar _ _)      = "unboundvar"
+errorName (OutOfRange _ _ _)    = "outofrange"
+errorName (KeyNotFound _ _)     = "keynotfound"
+errorName (FileNotFound _)      = "filenotfound"
+errorName (UserError name _)    = name 
+
 showError :: LispError -> String
-showError (NumArgs expected found) = "Expected " ++ show expected
-    ++ " args; found values " ++ unwordsList found
-showError (Parser parseErr) = "Parse error at " ++ show parseErr
+showError (NumArgs expected found) = "NumArgs: expected " ++ show expected
+    ++ " arg(s), found " ++ unwordsList found
+showError (Parser parseErr) = "ParseError: " ++ show parseErr
 showError (BadSpecialForm message form) = message ++ ": " ++ show form
 showError (NotFunction message func) = message ++ ": " ++ show func
-showError (TypeMismatch expected found) = "Invalid type: expected " ++ expected
+showError (TypeMismatch expected found) = "TypeMismatch: expected " ++ expected
     ++ ", found " ++ show found
 showError (UnboundVar message varname) = message ++ ": " ++ varname
-showError (OutOfRange n bounds obj) = "Index " ++ show n ++ " out of range "
-    ++ show bounds ++ " for object: " ++ show obj
-showError (KeyNotFound key hash) = "Key " ++ show key ++ " not found in hash: " ++ show hash
-showError (FileNotFound filename) = "File not found: " ++ filename
-showError (Default msg) = "Internal error: " ++ msg
+showError (OutOfRange n bounds obj) = "OutOfRange: index " ++ show n
+    ++ " out of range " ++ show bounds ++ " for object " ++ show obj
+showError (KeyNotFound key hash) = "KeyNotFound: key " ++ show key
+    ++ " not found in hash " ++ show hash
+showError (FileNotFound filename) = "FileNotFound: " ++ filename
+showError (UserError name args) = name ++ ": " ++ unwordsList args
+showError (Default msg) = "InternalError: " ++ msg
 
 trapError :: (MonadError e m, Show e) => m String -> m String
 trapError action = catchError action (return . show)

@@ -52,9 +52,11 @@ main = do
 
 runOne :: [String] -> IO ()
 runOne args = do
-    env <- primitiveBindings >>= flip bindVars [("args", List $ map String $ drop 1 args)]
-    (runIOThrows $ liftM show $ eval env (List [Atom "load", String (args !! 0)]))
-        >>= hPutStrLn stderr
+    env <- primitiveBindings
+    loadLibraries env
+    bindVars env [("args", List $ map String $ drop 1 args)]
+    result <- runIOThrows $ liftM show $ eval env (List [Atom "load", String (args !! 0)])
+    hPutStrLn stderr result
 
 runRepl :: IO ()
 runRepl = do
@@ -107,7 +109,7 @@ evalString env expr = evalExpr env expr >> return ()
 
 evalExpr :: Env -> String -> IO String
 evalExpr env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>=
-    meval env >>= eval env
+    macroExpand env >>= eval env
 
 -- Utility functions
 

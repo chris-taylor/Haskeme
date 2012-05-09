@@ -28,7 +28,7 @@ numericPrimitives =
     , ("complex?", numericBoolOp isComplex)
     , ("exact?", numericBoolOp isExact)
     , ("inexact?", numericBoolOp isInexact)
-    , ("==", numericOrdOp (==))
+    , ("==", numericEqOp (==))
     , ("<", numericOrdOp (<))
     , (">", numericOrdOp (>))
     , ("<=", numericOrdOp (<=))
@@ -37,6 +37,7 @@ numericPrimitives =
     , ("-", numericMinus)
     , ("*", numericBinOp (*))
     , ("/", fractionalBinOp (/))
+    , ("^", numericIntegralBinOp (^))
     , ("abs", numericUnOp abs)
     , ("sin", floatingUnOp sin)
     , ("cos", floatingUnOp cos)
@@ -53,11 +54,13 @@ numericPrimitives =
     , ("exp", floatingUnOp exp)
     , ("log", floatingUnOp log)
     , ("sqrt", floatingUnOp sqrt)
-    , ("expt", floatingBinOp (**))
+    , ("**", floatingBinOp (**))
     , ("div", integralBinOp div)
     , ("mod", integralBinOp mod)
     , ("quot", integralBinOp quot)
     , ("rem", integralBinOp rem)
+    , ("gcd", integralBinOp gcd)
+    , ("lcm", integralBinOp lcm)
     , ("as-integer", numericCast toNumber)
     , ("as-rational", numericCast toRatio)
     , ("as-real", numericCast toFloat)
@@ -195,9 +198,22 @@ numericBoolOp p xs  = throwError $ NumArgs 1 xs
 numericBinOp :: (forall a. Num a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
 numericBinOp op params = foldLeft1Error (promoteNumericBinaryOp op) params >>= pushDown
 
+numericIntegralBinOp :: (forall a b. (Num a, Integral b) => a -> b -> a) -> [LispVal] -> ThrowsError LispVal
+numericIntegralBinOp op params = foldLeft1Error (promoteNumericIntegralBinaryOp op) params >>= pushDown
+
 numericUnOp :: (forall a. Num a => a -> a) -> [LispVal] -> ThrowsError LispVal
 numericUnOp op [arg] = promoteNumericUnaryOp op arg >>= pushDown
 numericUnOp op args  = throwError $ NumArgs 1 args
+
+numericEqOp :: (forall a. (Eq a, Num a) => a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
+numericEqOp op params = case params of
+    [x]            -> throwError $ NumArgs 2 [x]
+    [x, y]         -> x `newOp` y
+    (x : y : rest) -> do res@(Bool result) <- x `newOp` y
+                         if result
+                            then numericEqOp op (y : rest)
+                            else return res
+    where newOp = promoteNumericEqOp op
 
 numericOrdOp :: (forall a. (Ord a, Num a) => a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
 numericOrdOp op params = case params of
@@ -230,6 +246,13 @@ promoteNumericBinaryOp op x y = case numType x `max` numType y of
     IntType     -> return $ Number (asNumber x `op` asNumber y)
     _           -> throwError $ TypeMismatch "number" y
 
+promoteNumericIntegralBinaryOp :: (forall a b. (Num a, Integral b) => a -> b -> a) -> LispVal -> LispVal -> ThrowsError LispVal
+promoteNumericIntegralBinaryOp op x y = case numType x of
+    IntType     -> return $ Number (asNumber x `op` asNumber y)
+    RatioType   -> return $ Ratio (asRatio x `op` asNumber y)
+    FloatType   -> return $ Float (asFloat x `op` asNumber y)
+    ComplexType -> return $ Complex (asComplex x `op` asNumber y)
+
 promoteNumericUnaryOp :: (forall a. Num a => a -> a) -> LispVal -> ThrowsError LispVal
 promoteNumericUnaryOp op x = case numType x of
     IntType     -> return $ Number (op $ asNumber x)
@@ -238,11 +261,19 @@ promoteNumericUnaryOp op x = case numType x of
     ComplexType -> return $ Complex (op $ asComplex x)
     NotANumber  -> throwError $ TypeMismatch "number" x
 
+promoteNumericEqOp :: (forall a. (Num a, Eq a) => a -> a -> Bool) -> LispVal -> LispVal -> ThrowsError LispVal
+promoteNumericEqOp op x y = case numType x `max` numType y of
+    IntType     -> return $ Bool (asNumber x `op` asNumber y)
+    RatioType   -> return $ Bool (asRatio x `op` asRatio y)
+    FloatType   -> return $ Bool (asFloat x `op` asFloat y)
+    ComplexType -> return $ Bool (asComplex x `op` asComplex y)
+    _           -> throwError $ TypeMismatch "number" y
+
 promoteNumericOrdOp :: (forall a. (Num a, Ord a) => a -> a -> Bool) -> LispVal -> LispVal -> ThrowsError LispVal
 promoteNumericOrdOp op x y = case numType x `max` numType y of
-    FloatType -> return $ Bool (asFloat x `op` asFloat y)
-    RatioType -> return $ Bool (asRatio x `op` asRatio y)
     IntType   -> return $ Bool (asNumber x `op` asNumber y)
+    RatioType -> return $ Bool (asRatio x `op` asRatio y)
+    FloatType -> return $ Bool (asFloat x `op` asFloat y)
     _         -> throwError $ TypeMismatch "int, rational or float" y
 
 promoteIntegralBinaryOp :: (forall a. Integral a => a -> a -> a) -> LispVal -> LispVal -> ThrowsError LispVal

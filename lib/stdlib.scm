@@ -13,7 +13,7 @@
 (def cddar (x) (cdr (cdar x)))
 (def cdddr (x) (cdr (cddr x)))
 
-;; Fundamental operations
+;;;; Fundamental operations
 
 (def nil '())
 
@@ -171,7 +171,7 @@
     `(let self nil
         (= self (fn ,params ,@body))))
 
-;;;; Control flow (case statement and membership testing)
+;;;; Control flow (case statement)
 
 (macro caselet (var expr . args)
     (let ex (afn (args)
@@ -184,11 +184,6 @@
 
 (macro case (expr . args)
     `(caselet ,(uniq) ,expr ,@args))
-
-(macro in (x . xs)
-    (w/uniq g
-        `(let ,g ,x
-            (or ,@(map1 (fn (c) `(is ,g ,c)) xs)))))
 
 ;;;; Folds and scans
 
@@ -248,7 +243,20 @@
             ,@body)
         `(let ,params (uniq) ,@body)))
 
-;;; Control flow (loops)
+;;;; Membership testing
+
+(macro in (x . xs)
+    (w/uniq g
+        `(let ,g ,x
+            (or ,@(map1 (fn (c) `(is ,g ,c)) xs)))))
+
+;;;; Control flow (execute in a local environment)
+
+(macro local exprs
+    (w/uniq g
+        `((fn (,g) ,@exprs) nil)))
+
+;;;; Control flow (loops)
 
 (macro while (test . body)
     (w/uniq gp
@@ -290,6 +298,9 @@
     `(for i 1 ,n ,@body))
 
 ;;;; Higher order functions
+
+(def const (x)
+    (fn _ x))
 
 (def complement (f)
     (fn args (not (apply f args))))
@@ -446,3 +457,32 @@
 
 (macro push (val lst)
     `(= ,lst (cons ,val ,lst)))
+
+;;;; Error checking
+
+(macro assert (test . rest)
+    `(if ,test 'ok
+         (raise "AssertFailed" ,@rest)))
+
+(macro assert-false (test . rest)
+    `(assert (not ,test) ,@rest))
+
+(macro assert-equal (fst snd . rest)
+    `(assert (is ,fst ,snd) ,@rest))
+
+(macro w/handler (handler . exprs)
+    `(try (do ,@exprs) ,handler))
+
+(macro w/handlers (handlers . exprs)
+    ((afn (hs)
+        (if (no (cdr hs))
+            `(w/handler ,(car hs) ,@exprs)
+            `(w/handler ,(car hs) ,(self (cdr hs)))))
+     handlers))
+
+;;;; Tests
+
+(macro run-tests (name . tests)
+    `(do ,@(map1 (fn (c) `(local ,c)) tests)
+        (pr "Tests passed: ")
+        (prn ,name)))

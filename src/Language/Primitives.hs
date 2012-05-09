@@ -143,6 +143,7 @@ primitives = numericPrimitives ++
              , ("car", car)
              , ("cdr", cdr)
              , ("cons", cons)
+             , ("exception-type", exceptionType)
              , ("is", is)
              , ("iso", equal) ]
 
@@ -151,6 +152,11 @@ typeOf xs = case xs of
     [ ] -> throwError $ NumArgs 1 xs
     [x] -> return $ Atom $ typeName x
     xs  -> return $ List $ map (Atom . typeName) xs
+
+exceptionType :: [LispVal] -> ThrowsError LispVal
+exceptionType [Exception e]  = return $ Atom $ errorName e
+exceptionType [notException] = throwError $ TypeMismatch "exception" notException
+exceptionType badArgs  = throwError $ NumArgs 1 badArgs
 
 unaryOp :: (LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
 unaryOp op [x]   = op x

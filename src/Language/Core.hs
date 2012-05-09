@@ -1,4 +1,4 @@
-module Language.Core (eval, meval, apply, load) where
+module Language.Core (eval, macroExpand, apply, load) where
 
 import Control.Monad.Error
 import System.Directory (doesFileExist)
@@ -32,21 +32,25 @@ eval env (List (Atom "macro" : params : body)) = evalDefineMacro env params body
 eval env (List (Atom "fn" : params : body)) = evalLambda env params body
 eval env (List (Atom "load" : params)) = evalLoad env params
 -- Here for debugging
-eval env (List [Atom "expand", code]) = expandThenEval env code >>= meval env
-eval env (List [Atom "expand1", code]) = expandThenEval env code >>= expandOne env
+eval env (List [Atom "expand", code])  = meval env code >>= macroExpand env
+eval env (List [Atom "expand1", code]) = meval env code >>= macroExpand1 env
 eval env (List [Atom "show-env", namespace]) = showNamespace env namespace
 -- End debug section
+-- Experimental
+eval env (List (Atom "raise" : args)) = evalRaise env args
+eval env (List (Atom "try" : args)) = evalTry env args
+-- End experimental section
 eval env (List (function : args)) = evalApplication env function args
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
 evalApplication :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalApplication env function args = do
-    func <- expandThenEval env function
-    mapM (expandThenEval env) args >>= apply func
+    func <- meval env function
+    mapM (meval env) args >>= apply func
 
 evalDefine :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalDefine env (Atom var) [form] =
-    expandThenEval env form >>= defineVar env var
+    meval env form >>= defineVar env var
 evalDefine env (Atom var) (List params : body) = 
     makeNormalFunc env params body >>= defineVar env var
 evalDefine env (Atom var) (DottedList params varargs : body) = 
@@ -69,39 +73,39 @@ evalLambda env varargs@(Atom _) body = makeVarArgs varargs env [] body
 
 evalIf :: Env -> [LispVal] -> IOThrowsError LispVal
 evalIf env args@(test : rest) = do
-    it <- expandThenEval env test
+    it <- meval env test
     newEnv <- bindOne env ("it", it)
     evalIf' newEnv (truthVal it) rest
 
 evalIf' :: Env -> Bool -> [LispVal] -> IOThrowsError LispVal
 evalIf' env truth [conseq]        = evalIf' env truth [conseq, Bool False]
 evalIf' env truth [conseq, alt]   = if truth
-    then expandThenEval env conseq
-    else expandThenEval env alt
+    then meval env conseq
+    else meval env alt
 evalIf' env truth (conseq : rest) = if truth
-    then expandThenEval env conseq
+    then meval env conseq
     else evalIf env rest
 
 evalSet :: Env -> [LispVal] -> IOThrowsError LispVal
-evalSet env [Atom var, form] = expandThenEval env form >>= setVar env var
-evalSet env [List [Atom "car", Atom var], form] = expandThenEval env form >>= setCar env var
-evalSet env [List [Atom "cdr", Atom var], form] = expandThenEval env form >>= setCdr env var
+evalSet env [Atom var, form] = meval env form >>= setVar env var
+evalSet env [List [Atom "car", Atom var], form] = meval env form >>= setCar env var
+evalSet env [List [Atom "cdr", Atom var], form] = meval env form >>= setCdr env var
 evalSet env [List [Atom var, form1], form2] = do
-    key <- expandThenEval env form1
-    val <- expandThenEval env form2
+    key <- meval env form1
+    val <- meval env form2
     setIndex env var key val
 evalSet env [other, _] = throwError $ TypeMismatch "atom or list" other
 evalSet env badArgs = throwError $ NumArgs 2 badArgs
 
 evalQuasiquote :: Int -> Env -> LispVal -> IOThrowsError LispVal
-evalQuasiquote 0 env val = expandThenEval env val
+evalQuasiquote 0 env val = meval env val
 evalQuasiquote n env (List [Atom "quasiquote", val]) = evalQuasiquote (n+1) env val
 evalQuasiquote n env (List [Atom "unquote", val])    = evalQuasiquote (n-1) env val
 evalQuasiquote n env (List vals) = liftM (List . concat) $ mapM (eqqList n env) vals
 evalQuasiquote n env val = return val
 
 eqqList :: Int -> Env -> LispVal -> IOThrowsError [LispVal]
-eqqList 0 env val = liftM return $ expandThenEval env val
+eqqList 0 env val = liftM return $ meval env val
 eqqList n env (List [Atom "quasiquote", val]) = liftM return $ evalQuasiquote (n+1) env val
 eqqList n env (List [Atom "unquote", val])    = liftM return $ evalQuasiquote (n-1) env val
 eqqList n env (List [Atom "unquotesplicing", val]) = do
@@ -116,9 +120,20 @@ evalLoad :: Env -> [LispVal] -> IOThrowsError LispVal
 evalLoad env [arg] = do
     result <- eval env arg
     case result of
-        (String filename) -> load filename >>= liftM last . mapM (expandThenEval env)
+        (String filename) -> load filename >>= liftM last . mapM (meval env)
         other             -> throwError $ TypeMismatch "string" other
 evalLoad env args = throwError $ NumArgs 1 args
+
+-- Code for user errors - throw and catch
+
+evalRaise :: Env -> [LispVal] -> IOThrowsError LispVal
+evalRaise env (String name : args) = mapM (meval env) args >>= throwError . UserError name
+evalRaise env args                 = mapM (meval env) args >>= throwError . UserError "UserError"
+
+evalTry :: Env -> [LispVal] -> IOThrowsError LispVal
+evalTry env [expr, handler] = meval env expr
+    `catchError` \err -> meval env handler >>= flip apply [Exception err]
+evalTry env badArgs = throwError $ NumArgs 2 badArgs
 
 -- Helper functions to create user functions and macros
 
@@ -126,7 +141,7 @@ type ProcConstructor = [String] -> Maybe String -> [LispVal] -> Env -> LispVal
 
 makeProc :: ProcConstructor -> Maybe String -> Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
 makeProc constructor varargs env params body = do
-    body' <- mapM (meval env) body
+    body' <- mapM (macroExpand env) body
     return $ constructor (map showVal params) varargs body' env
 
 makeNormalFunc :: Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
@@ -143,7 +158,7 @@ makeVarArgsMacro varargs = makeProc Macro (Just $ showVal varargs)
 
 -- Macro expansion
 
-meval :: Env -> LispVal -> IOThrowsError LispVal
+macroExpand :: Env -> LispVal -> IOThrowsError LispVal
 {-  Macro evaluation takes two environments: the normal environment containing
     all primitives and user definitions, and a special macro environment that
     contains only macro forms. Evaluation works as follows:
@@ -155,29 +170,25 @@ meval :: Env -> LispVal -> IOThrowsError LispVal
       environment. If so, then quote and return the associated macro, otherwise
       return the form.
     - If the form is anything other than a list or an atom, then return it. -}
-meval env val@(List _) = expandApplication env val
---meval env val@(Atom name) = expandAtom env val
-meval env val = return val
+macroExpand env val@(List _) = expandApplication env val
+--macroExpand env val@(Atom name) = expandAtom env val
+macroExpand env val = return val
 
-expandOne :: Env -> LispVal -> IOThrowsError LispVal
-expandOne envRef val@(List (Atom name : args)) = do
+genericExpand :: (Env -> LispVal -> IOThrowsError LispVal) -> Env -> LispVal -> IOThrowsError LispVal
+genericExpand continue envRef val@(List (Atom name : args)) = do
     env <- liftIO $ readIORef envRef
     maybe (return val)
           (\macroRef -> do
             macro <- liftIO $ readIORef macroRef
-            apply macro args)
+            apply macro args >>= continue envRef)
           (macroLookup name env)
-expandOne envRef val = return val
+genericExpand _ _ val = return val
+
+macroExpand1 :: Env -> LispVal -> IOThrowsError LispVal
+macroExpand1 = genericExpand (\_ -> return)
 
 expandApplication :: Env -> LispVal -> IOThrowsError LispVal
-expandApplication envRef val@(List (Atom name : args)) = do
-    env <- liftIO $ readIORef envRef
-    maybe (return val)
-          (\macroRef -> do
-            macro <- liftIO $ readIORef macroRef
-            apply macro args >>= meval envRef)
-          (macroLookup name env)
-expandApplication envRef val = return val
+expandApplication = genericExpand macroExpand
 
 expandAtom :: Env -> LispVal -> IOThrowsError LispVal
 expandAtom envRef val@(Atom name) = do
@@ -190,8 +201,8 @@ expandAtom envRef val@(Atom name) = do
 
 -- Combined eval and expand
 
-expandThenEval :: Env -> LispVal -> IOThrowsError LispVal
-expandThenEval env val = meval env val >>= eval env
+meval :: Env -> LispVal -> IOThrowsError LispVal
+meval env val = macroExpand env val >>= eval env
 
 -- Application
 
@@ -214,7 +225,7 @@ applyFunc params varargs body closure args =
     where
         remainingArgs = drop (length params) args
         num = toInteger . length
-        evalBody env = liftM last $ mapM (expandThenEval env) body
+        evalBody env = liftM last $ mapM (meval env) body
         bindVarArgs arg env = case arg of
             Just argName -> liftIO $ bindVars env [ (argName, List $ remainingArgs) ]
             Nothing      -> return env
