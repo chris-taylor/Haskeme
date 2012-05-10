@@ -460,6 +460,9 @@
 
 ;;;; Error checking
 
+(def (raise-exception arg)
+    (raise (new-exception arg)))
+
 (macro assert (test . rest)
     `(if ,test 'ok
          (raise "AssertFailed" ,@rest)))
