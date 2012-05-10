@@ -164,6 +164,15 @@ type ThrowsError = Either LispError
 
 type IOThrowsError = ErrorT LispError IO
 
+errNumArgs :: Integer -> [LispVal] -> IOThrowsError LispVal
+errNumArgs num args = throwError $ NumArgs num args
+
+errTypeMismatch :: String -> LispVal -> IOThrowsError LispVal
+errTypeMismatch expected found = throwError $ TypeMismatch expected found
+
+errUser :: String -> [LispVal] -> IOThrowsError LispVal
+errUser name args = throwError $ UserError name args
+
 instance Show LispError where
     show = showError
 

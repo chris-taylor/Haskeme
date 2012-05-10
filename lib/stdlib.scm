@@ -466,7 +466,7 @@
 (macro assert (test . rest)
     `(if ,test 'ok
          (raise "AssertFailed" ,@rest)))
-; 
+
 (macro assert-false (test . rest)
     `(assert (not ,test) ,@rest))
 

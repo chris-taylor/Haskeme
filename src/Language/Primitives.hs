@@ -163,8 +163,8 @@ typeOf xs = case xs of
     xs  -> return $ List $ map (Atom . typeName) xs
 
 newException :: [LispVal] -> ThrowsError LispVal
-newException (String name : args) = return $ Exception $ UserError name args
-newException args                 = return $ Exception $ UserError "error" args
+newException (Atom name : args) = return $ Exception $ UserError name args
+newException args               = return $ Exception $ UserError "error" args
 
 exceptionType :: [LispVal] -> ThrowsError LispVal
 exceptionType [Exception e]  = return $ Atom $ errorName e
