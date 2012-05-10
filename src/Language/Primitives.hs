@@ -124,26 +124,35 @@ rand badArgs = throwError $ NumArgs 1 badArgs
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = numericPrimitives ++ 
              [ ("type", typeOf)
+             -- String comparisons
              , ("str==", strBoolBinop (==))
              , ("str<", strBoolBinop (<))
              , ("str>", strBoolBinop (>))
              , ("str<=", strBoolBinop (<=))
              , ("str>=", strBoolBinop (>=))
+             -- Vector/hash manipulation
              , ("vector", vector)
              , ("hash", hash)
              , ("keys", unaryOp keys)
              , ("vals", unaryOp vals)
              , ("len", len)
+             -- Type conversion
              , ("string->list", typeTrans stringToList)
              , ("list->string", typeTrans listToString)
              , ("symbol->string", typeTrans symbolToString)
              , ("string->symbol", typeTrans stringToSymbol)
              , ("vector->list", typeTrans vectorToList)
              , ("list->vector", typeTrans listToVector)
+             -- Fundamental operators
              , ("car", car)
              , ("cdr", cdr)
              , ("cons", cons)
+             -- Exception-handling
+             , ("new-exception", newException)
              , ("exception-type", exceptionType)
+             , ("exception-args", exceptionArgs)
+             , ("raise", raiseException)
+             -- Comparison operators
              , ("is", is)
              , ("iso", equal) ]
 
@@ -153,10 +162,25 @@ typeOf xs = case xs of
     [x] -> return $ Atom $ typeName x
     xs  -> return $ List $ map (Atom . typeName) xs
 
+newException :: [LispVal] -> ThrowsError LispVal
+newException (String name : args) = return $ Exception $ UserError name args
+newException args                 = return $ Exception $ UserError "error" args
+
 exceptionType :: [LispVal] -> ThrowsError LispVal
 exceptionType [Exception e]  = return $ Atom $ errorName e
 exceptionType [notException] = throwError $ TypeMismatch "exception" notException
 exceptionType badArgs  = throwError $ NumArgs 1 badArgs
+
+exceptionArgs :: [LispVal] -> ThrowsError LispVal
+exceptionArgs [Exception (UserError _ args)] = return $ List args
+exceptionArgs [Exception _]                  = return $ nil
+exceptionArgs [notException]                 = throwError $ TypeMismatch "exception" notException
+exceptionArgs badArgs                        = throwError $ NumArgs 1 badArgs
+
+raiseException :: [LispVal] -> ThrowsError LispVal
+raiseException [Exception err] = throwError err
+raiseException [notException]  = throwError $ TypeMismatch "exception" notException
+raiseException  badArgs        = throwError $ NumArgs 1 badArgs
 
 unaryOp :: (LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
 unaryOp op [x]   = op x

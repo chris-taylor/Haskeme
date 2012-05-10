@@ -37,7 +37,7 @@ eval env (List [Atom "expand1", code]) = meval env code >>= macroExpand1 env
 eval env (List [Atom "show-env", namespace]) = showNamespace env namespace
 -- End debug section
 -- Experimental
-eval env (List (Atom "raise" : args)) = evalRaise env args
+--eval env (List (Atom "raise" : args)) = evalRaise env args
 eval env (List (Atom "try" : args)) = evalTry env args
 -- End experimental section
 eval env (List (function : args)) = evalApplication env function args
@@ -124,11 +124,7 @@ evalLoad env [arg] = do
         other             -> throwError $ TypeMismatch "string" other
 evalLoad env args = throwError $ NumArgs 1 args
 
--- Code for user errors - throw and catch
-
-evalRaise :: Env -> [LispVal] -> IOThrowsError LispVal
-evalRaise env (String name : args) = mapM (meval env) args >>= throwError . UserError name
-evalRaise env args                 = mapM (meval env) args >>= throwError . UserError "UserError"
+-- Code for user errors
 
 evalTry :: Env -> [LispVal] -> IOThrowsError LispVal
 evalTry env [expr, handler] = meval env expr
