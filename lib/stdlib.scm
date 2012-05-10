@@ -460,7 +460,7 @@
 
 ;;;; Error checking
 
-(def (raise-exception arg)
+(def raise-exception (arg)
     (raise (new-exception arg)))
 
 (macro assert (test . rest)
