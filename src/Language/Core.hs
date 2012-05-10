@@ -23,23 +23,21 @@ eval env val@(Bool _)    = return val
 eval env val@(Vector _)  = return val
 eval env val@(Hash _)    = return val
 eval env (Atom name)     = getVar env name
-eval env (List [Atom "quote", val]) = return val
-eval env (List [Atom "quasiquote", val]) = evalQuasiquote 1 env val
-eval env (List (Atom "if" : exprs)) = evalIf env exprs
-eval env (List (Atom "=" : args)) = evalSet env args
-eval env (List (Atom "def" : var : rest)) = evalDefine env var rest
-eval env (List (Atom "macro" : params : body)) = evalDefineMacro env params body
-eval env (List (Atom "fn" : params : body)) = evalLambda env params body
-eval env (List (Atom "load" : params)) = evalLoad env params
+eval env (List [Atom "quote", val])             = return val
+eval env (List [Atom "quasiquote", val])        = evalQuasiquote 1 env val
+eval env (List (Atom "if" : exprs))             = evalIf env exprs
+eval env (List (Atom "=" : args))               = evalSet env args
+eval env (List (Atom "def" : var : rest))       = evalDefine defineVar env var rest
+eval env (List (Atom "macro" : var : rest))     = evalDefine defineMacro env var rest
+eval env (List (Atom "fn" : params : body))     = evalLambda env params body
+eval env (List (Atom "try" : args))             = evalTry env args
+eval env (List (Atom "load" : params))          = evalLoad env params
 -- Here for debugging
-eval env (List [Atom "expand", code])  = meval env code >>= macroExpand env
-eval env (List [Atom "expand1", code]) = meval env code >>= macroExpand1 env
+eval env (List [Atom "expand", code])  = meval env code >>= expandAll env
+eval env (List [Atom "expand1", code]) = meval env code >>= expandOne env
+eval env (List [Atom "show-env"])            = showNamespace env (String "v") >> showNamespace env (String "m")
 eval env (List [Atom "show-env", namespace]) = showNamespace env namespace
 -- End debug section
--- Experimental
---eval env (List (Atom "raise" : args)) = evalRaise env args
-eval env (List (Atom "try" : args)) = evalTry env args
--- End experimental section
 eval env (List (function : args)) = evalApplication env function args
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
@@ -48,23 +46,16 @@ evalApplication env function args = do
     func <- meval env function
     mapM (meval env) args >>= apply func
 
-evalDefine :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
-evalDefine env (Atom var) [form] =
-    meval env form >>= defineVar env var
-evalDefine env (Atom var) (List params : body) = 
-    makeNormalFunc env params body >>= defineVar env var
-evalDefine env (Atom var) (DottedList params varargs : body) = 
-    makeVarArgs varargs env params body >>= defineVar env var
-evalDefine env (Atom var) (varargs@(Atom _) : body) = 
-    makeVarArgs varargs env [] body >>= defineVar env var
-
-evalDefineMacro :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
-evalDefineMacro env (Atom var) (List params : body) = 
-    makeNormalMacro env params body >>= defineMacro env var
-evalDefineMacro env (Atom var) (DottedList params varargs : body) = 
-    makeVarArgsMacro varargs env params body >>= defineMacro env var
-evalDefineMacro env (Atom var) (varargs@(Atom _) : body) = 
-    makeVarArgsMacro varargs env [] body >>= defineMacro env var
+evalDefine :: (Env -> String -> LispVal -> IOThrowsError LispVal)
+    -> Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
+evalDefine definer env (Atom var) [form] =
+    meval env form >>= definer env var
+evalDefine definer env (Atom var) (List params : body) = 
+    makeNormalFunc env params body >>= definer env var
+evalDefine definer env (Atom var) (DottedList params varargs : body) = 
+    makeVarArgs varargs env params body >>= definer env var
+evalDefine definer env (Atom var) (varargs@(Atom _) : body) = 
+    makeVarArgs varargs env [] body >>= definer env var
 
 evalLambda :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
 evalLambda env (List params) body = makeNormalFunc env params body
@@ -131,42 +122,29 @@ evalTry env [expr, handler] = meval env expr
     `catchError` \err -> meval env handler >>= flip apply [Exception err]
 evalTry env badArgs = throwError $ NumArgs 2 badArgs
 
--- Helper functions to create user functions and macros
+-- Helper functions to create user procedures
 
-type ProcConstructor = [String] -> Maybe String -> [LispVal] -> Env -> LispVal
-
-makeProc :: ProcConstructor -> Maybe String -> Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
-makeProc constructor varargs env params body = do
+makeFunc :: Maybe String -> Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
+makeFunc varargs env params body = do
     body' <- mapM (macroExpand env) body
-    return $ constructor (map showVal params) varargs body' env
+    return $ Func (map showVal params) varargs body' env
 
 makeNormalFunc :: Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
-makeNormalFunc = makeProc Func Nothing
+makeNormalFunc = makeFunc Nothing
 
 makeVarArgs :: LispVal -> Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
-makeVarArgs varargs = makeProc Func (Just $ showVal varargs)
-
-makeNormalMacro :: Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
-makeNormalMacro = makeProc Macro Nothing
-
-makeVarArgsMacro :: LispVal -> Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
-makeVarArgsMacro varargs = makeProc Macro (Just $ showVal varargs)
+makeVarArgs varargs = makeFunc (Just $ showVal varargs)
 
 -- Macro expansion
 
 macroExpand :: Env -> LispVal -> IOThrowsError LispVal
-{-  Macro evaluation takes two environments: the normal environment containing
-    all primitives and user definitions, and a special macro environment that
-    contains only macro forms. Evaluation works as follows:
+{-  Macro expansion works as follows:
     - If the form is a list with an atom as the first element, then check if
-      that atom has a binding in the macro environment. If it does, then apply
+      that atom has a binding in the macro namespace. If it does, then apply
       the macro to the remaining elements of the list **after macro expanding,
       but not evaluating, them**
-    - If the form is an atom, check if it has a binding in the macro
-      environment. If so, then quote and return the associated macro, otherwise
-      return the form.
-    - If the form is anything other than a list or an atom, then return it. -}
-macroExpand env val@(List _) = expandApplication env val
+    - If the form is anything other than a list, then return it unchanged. -}
+macroExpand env val@(List _) = expandAll env val
 --macroExpand env val@(Atom name) = expandAtom env val
 macroExpand env val = return val
 
@@ -180,20 +158,20 @@ genericExpand continue envRef val@(List (Atom name : args)) = do
           (macroLookup name env)
 genericExpand _ _ val = return val
 
-macroExpand1 :: Env -> LispVal -> IOThrowsError LispVal
-macroExpand1 = genericExpand (\_ -> return)
+expandOne :: Env -> LispVal -> IOThrowsError LispVal
+expandOne = genericExpand (\_ -> return)
 
-expandApplication :: Env -> LispVal -> IOThrowsError LispVal
-expandApplication = genericExpand macroExpand
+expandAll :: Env -> LispVal -> IOThrowsError LispVal
+expandAll = genericExpand macroExpand
 
-expandAtom :: Env -> LispVal -> IOThrowsError LispVal
-expandAtom envRef val@(Atom name) = do
-    env <- liftIO $ readIORef envRef
-    maybe (return val)
-          (\macroRef -> do
-            macro <- liftIO $ readIORef macroRef
-            returnQuoted macro)
-          (macroLookup name env)
+--expandAtom :: Env -> LispVal -> IOThrowsError LispVal
+--expandAtom envRef val@(Atom name) = do
+--    env <- liftIO $ readIORef envRef
+--    maybe (return val)
+--          (\macroRef -> do
+--            macro <- liftIO $ readIORef macroRef
+--            returnQuoted macro)
+--          (macroLookup name env)
 
 -- Combined eval and expand
 
@@ -206,7 +184,6 @@ apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
 apply (PrimitiveFunc _ func) args = liftThrows $ func args
 apply (IOFunc _ func) args        = func args
 apply (Func  params varargs body closure) args = applyFunc params varargs body closure args
-apply (Macro params varargs body closure) args = applyFunc params varargs body closure args
 apply (HFunc params varargs body closure) args = applyHFunc params varargs body closure args
 apply (String str) args = applyString str args
 apply (Vector arr) args = applyVector arr args

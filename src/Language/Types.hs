@@ -55,8 +55,6 @@ data LispVal = Atom String
              | HFunc { hparams :: [String], hvararg :: Maybe String
                      , hbody :: (Env -> LispVal -> Maybe [LispVal] -> IOThrowsError LispVal)
                      , hclosure :: Env }
-             | Macro { macroParams :: [String], macroVararg :: Maybe String
-                     , macroBody :: [LispVal], macroClosure :: Env }
              | Port Handle
              | Exception LispError
              | Nil
@@ -87,7 +85,6 @@ showVal (PrimitiveFunc name _) = "<primitive:" ++ name ++ ">"
 showVal (IOFunc name _) = "<ioPrimitive:" ++ name ++ ">"
 showVal (HFunc _ _ _ _) = "<haskellFunction>"
 showVal (Func { params = args, vararg = varargs }) = showFunc "fn" args varargs
-showVal (Macro { macroParams = args, macroVararg = varargs }) = showFunc "macro" args varargs
 showVal (Port _) = "<IO port>"
 showVal (Exception e) = "<exception:" ++ errorName e ++ ">"
 showval (Nil) = "<nil>"
@@ -129,7 +126,6 @@ typeName (Bool _)            = "boolean"
 typeName (PrimitiveFunc _ _) = "procedure"
 typeName (IOFunc _ _)        = "procedure"
 typeName (Func {})           = "procedure"
-typeName (Macro {})          = "macro"
 typeName (Exception _)       = "exception"
 typeName (Port _)            = "port"
 

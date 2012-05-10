@@ -174,7 +174,6 @@ parseNegated = do
     char '~'
     func <- parseAtom
     return $ List [Atom "complement", func]
-    --return $ List [Atom "fn", List [Atom "_"], List [Atom "not", List [func, Atom "_"]]]
 
 -- Parsing helper functions
 

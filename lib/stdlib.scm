@@ -48,8 +48,8 @@
 (def vector? (x)    (isa x 'vector))
 (def hash? (x)      (isa x 'hash))
 (def procedure? (x) (isa x 'procedure))
-(def macro? (x)     (isa x 'macro))
 (def port? (x)      (isa x 'port))
+(def exception? (x) (isa x 'exception))
 
 ;;;; Fundamental list operations
 
@@ -463,7 +463,7 @@
 (macro assert (test . rest)
     `(if ,test 'ok
          (raise "AssertFailed" ,@rest)))
-
+; 
 (macro assert-false (test . rest)
     `(assert (not ,test) ,@rest))
 

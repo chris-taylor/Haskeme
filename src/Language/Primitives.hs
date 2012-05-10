@@ -307,10 +307,6 @@ isProcedure (IOFunc _ _)        = True
 isProcedure (Func _ _ _ _)      = True
 isProcedure _                   = False
 
-isMacro :: LispVal -> Bool
-isMacro (Macro _ _ _ _) = True
-isMacro _               = False
-
 isPort :: LispVal -> Bool
 isPort (Port _) = True
 isPort _        = False
