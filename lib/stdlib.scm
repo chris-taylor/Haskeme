@@ -480,6 +480,12 @@
             `(w/handler ,(car hs) ,(self (cdr hs)))))
      handlers))
 
+(macro handler args
+    (w/uniq e
+        `(fn (,e)
+            (def e ,e)
+            (case (exception-type ,e) ,@args))))
+
 ;;;; Tests
 
 (macro run-tests (name . tests)

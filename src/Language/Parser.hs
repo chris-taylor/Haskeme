@@ -151,8 +151,11 @@ parseList = do
     do  char '.' >> whiteSpace
         tl <- parseExpr
         spaces >> char ')'
-        return $ DottedList hd tl
-      <|> (spaces >> char ')' >> (return $ List hd))
+        return $ case tl of
+            List xs         -> List (hd ++ xs)
+            DottedList xs x -> DottedList (hd ++ xs) x
+            _               -> DottedList hd tl
+      <|> (spaces >> char ')' >> return (List hd))
 
 parseVector :: Parser LispVal
 parseVector = do
