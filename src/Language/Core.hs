@@ -149,13 +149,14 @@ macroExpand env val@(List _) = expandAll env val
 macroExpand env val = return val
 
 genericExpand :: (Env -> LispVal -> IOThrowsError LispVal) -> Env -> LispVal -> IOThrowsError LispVal
-genericExpand continue envRef val@(List (Atom name : args)) = do
-    env <- liftIO $ readIORef envRef
+genericExpand continue env val@(List (Atom name : args)) = do
+    --local <- liftIO $ readIORef env
+    result <- liftIO $ macRecLookup name env
     maybe (return val)
           (\macroRef -> do
             macro <- liftIO $ readIORef macroRef
-            apply macro args >>= continue envRef)
-          (macroLookup name env)
+            apply macro args >>= continue env)
+          (result)
 genericExpand _ _ val = return val
 
 expandOne :: Env -> LispVal -> IOThrowsError LispVal

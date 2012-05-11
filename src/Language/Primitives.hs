@@ -30,18 +30,24 @@ primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc IOFunc) ioPrimiti
 
 ioPrimitives :: [(String, [LispVal] -> IOThrowsError LispVal)]
 ioPrimitives = [ ("apply", applyProc)
+               -- Read/write
+               , ("write", writeProc)
+               , ("read", readProc)
+               -- Console output
+               , ("pr", printProc putStr)
+               , ("prn", printProc putStrLn)
+               -- File i/o
                , ("open-input-file", makePort ReadMode)
                , ("open-output-file", makePort WriteMode)
                , ("close-input-port", closePort)
                , ("close-output-port", closePort)
-               , ("read", readProc)
-               , ("write", writeProc)
-               , ("pr", printProc putStr)
-               , ("prn", printProc putStrLn)
                , ("read-contents", readContents)
                , ("read-all", readAll)
                , ("file-exists", fileExists)
                , ("delete-file", deleteFile)
+               -- Hash functions
+               , ("update", hashUpdate)
+               -- Random numbers and unique symbols
                , ("random", rand)
                , ("uniq", gensym) ]
 
@@ -130,11 +136,14 @@ primitives = numericPrimitives ++
              , ("str>", strBoolBinop (>))
              , ("str<=", strBoolBinop (<=))
              , ("str>=", strBoolBinop (>=))
-             -- Vector/hash manipulation
+             -- Vectors
              , ("vector", vector)
+             -- Hashes
              , ("hash", hash)
              , ("keys", unaryOp keys)
              , ("vals", unaryOp vals)
+             , ("insert", hashInsert)
+             -- Polymorphic length
              , ("len", len)
              -- Type conversion
              , ("string->list", typeTrans stringToList)
@@ -342,6 +351,8 @@ listToVector :: LispVal -> ThrowsError LispVal
 listToVector (List xs) = return $ Vector $ listArray (0, length xs - 1) xs
 listToVector notList   = throwError $ TypeMismatch "list" notList
 
+-- Hash functions
+
 keys :: LispVal -> ThrowsError LispVal
 keys (Hash hash) = return . List $ Map.keys hash
 keys notHash     = throwError $ TypeMismatch "hash" notHash
@@ -349,6 +360,25 @@ keys notHash     = throwError $ TypeMismatch "hash" notHash
 vals :: LispVal -> ThrowsError LispVal
 vals (Hash hash) = return . List $ Map.elems hash
 vals notHash     = throwError $ TypeMismatch "hash" notHash
+
+hashInsert :: [LispVal] -> ThrowsError LispVal
+hashInsert [key, val, Hash hash] = return $ Hash $ Map.insert key val hash
+hashInsert [key, val, notHash]   = errTypeMismatch "hash" notHash
+hashInsert badArgs               = errNumArgs 3 badArgs
+
+hashUpdate :: [LispVal] -> IOThrowsError LispVal
+hashUpdate [key, func, Hash hash] = if Map.member key hash
+    then case typeName func of
+        "procedure"  -> do
+            let oldValue = hash Map.! key
+            newValue <- apply func [oldValue]
+            return $ Hash $ Map.insert key newValue hash
+        notProcedure -> errTypeMismatch "procedure" func
+    else throwError $ KeyNotFound key (Hash hash)
+hashUpdate [key, func, notHash]   = errTypeMismatch "hash" notHash
+hashUpdate badArgs                = errNumArgs 3 badArgs 
+
+-- Primitives
 
 car :: [LispVal] -> ThrowsError LispVal
 car [List (x:_)]          = return x
@@ -433,7 +463,6 @@ equal [arg1, arg2] = do
     eqvEquals <- is [arg1, arg2]
     return $ Bool $ (primitiveEquals || let (Bool x) = eqvEquals in x)
 equal badArgs = throwError $ NumArgs 2 badArgs
-
 
 -- Helper functions
 

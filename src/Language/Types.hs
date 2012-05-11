@@ -1,16 +1,13 @@
-{-# LANGUAGE NoMonomorphismRestriction, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE NoMonomorphismRestriction, TypeSynonymInstances,
+    FlexibleInstances, FlexibleContexts #-}
 
 module Language.Types (
       LispVal (..)
     , LispError (..)
-    , VectorType
-    , HashType
-    , EnvType
-    , Env
-    , Namespace
-    , Var
-    , ThrowsError
-    , IOThrowsError
+    , VectorType, HashType
+    , Env (..), EnvType, Namespace, Var
+    , ThrowsError, IOThrowsError
+    , errTypeMismatch, errNumArgs, errUser
     , showVal, nil, eqv, unwordsList, pairs, unpairs, truthVal, typeName, errorName, nullEnv
     , trapError, extractValue, liftThrows, runIOThrows, runIOThrowsCompile
     ) where
@@ -28,10 +25,14 @@ type Namespace = String
 type Var = String
 
 type EnvType = Map.Map (Namespace, Var) (IORef LispVal)
-type Env = IORef EnvType
+
+data Env = Environment { parent :: Maybe Env
+                       , bindings :: IORef EnvType }
 
 nullEnv :: IO Env
-nullEnv = newIORef Map.empty
+nullEnv = do
+    nullBindings <- newIORef Map.empty
+    return $ Environment Nothing nullBindings
 
 type VectorType = Array Int LispVal
 type HashType = Map.Map LispVal LispVal
@@ -50,9 +51,12 @@ data LispVal = Atom String
              | Bool Bool
              | PrimitiveFunc String ([LispVal] -> ThrowsError LispVal)
              | IOFunc String ([LispVal] -> IOThrowsError LispVal)
-             | Func { params :: [String], vararg :: Maybe String
-                    , body :: [LispVal], closure :: Env }
-             | HFunc { hparams :: [String], hvararg :: Maybe String
+             | Func { params :: [String]
+                    , vararg :: Maybe String
+                    , body :: [LispVal]
+                    , closure :: Env }
+             | HFunc { hparams :: [String]
+                     , hvararg :: Maybe String
                      , hbody :: (Env -> LispVal -> Maybe [LispVal] -> IOThrowsError LispVal)
                      , hclosure :: Env }
              | Port Handle
@@ -164,21 +168,21 @@ type ThrowsError = Either LispError
 
 type IOThrowsError = ErrorT LispError IO
 
-errNumArgs :: Integer -> [LispVal] -> IOThrowsError LispVal
-errNumArgs num args = throwError $ NumArgs num args
-
-errTypeMismatch :: String -> LispVal -> IOThrowsError LispVal
-errTypeMismatch expected found = throwError $ TypeMismatch expected found
-
-errUser :: String -> [LispVal] -> IOThrowsError LispVal
-errUser name args = throwError $ UserError name args
-
 instance Show LispError where
     show = showError
 
 instance Error LispError where
     noMsg  = Default "An internal error has occured"
     strMsg = Default
+
+errNumArgs :: MonadError LispError m => Integer -> [LispVal] -> m LispVal
+errNumArgs num args = throwError $ NumArgs num args
+
+errTypeMismatch :: MonadError LispError m => String -> LispVal -> m LispVal
+errTypeMismatch expected found = throwError $ TypeMismatch expected found
+
+errUser :: MonadError LispError m => String -> [LispVal] -> m LispVal
+errUser name args = throwError $ UserError name args
 
 errorName :: LispError -> String
 errorName (NumArgs _ _)         = "numargs"
