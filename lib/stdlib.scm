@@ -62,7 +62,7 @@
 
 (def alist (obj)
   (or (is obj nil)
-      (isa (type obj) 'pair)))
+      (is (type obj) 'pair)))
 
 (def empty-form (obj)
   (if (isa obj 'string) ""
@@ -544,6 +544,17 @@
 
 (def alist->hash (al)
   (apply hash (unpair al)))
+
+(def lookup (k m)
+  (if (no m) nil
+      (if (is (caar m) k) (cadar m)
+          (lookup k (cdr m)))))
+
+(def hash-insert insert)
+
+(def insert (k v m)
+  (if (hash? m) (hash-insert k v m)
+      (alist m) (cons (list k v) m)))
 
 ;;;; Assignment and modification
 
