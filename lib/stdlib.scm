@@ -30,12 +30,12 @@
 (macro and args
   (if (no args) #t
     `(if ,(car args) (and ,@(cdr args))
-       #f)))
+         #f)))
 
 (macro or args
   (if (no args) #f
     `(if ,(car args) #t
-       (or ,@(cdr args)))))
+         (or ,@(cdr args)))))
 
 ;;;; Type checking
 
@@ -51,6 +51,11 @@
 (def port? (x)      (isa x 'port))
 (def exception? (x) (isa x 'exception))
 
+;;;; String constructor
+
+(def string (x)
+  (cons x ""))
+
 ;;;; Fundamental list operations
 
 (def list objs objs)
@@ -59,11 +64,24 @@
   (or (is obj nil)
       (isa (type obj) 'pair)))
 
+(def empty-form (obj)
+  (if (isa obj 'string) ""
+      (isa obj 'vector) $()
+      (isa obj 'hash)   #()
+      nil))
+
+(def unit-form (x obj)
+  (if (isa obj 'string) (string x)
+      (isa obj 'vector) (vector x)
+      (list x)))
+
 (def null (obj)
-  (or (is obj nil)
-    (is obj "")
-    (is obj $())
-    (is obj #())))
+  (is obj (empty-form obj)))
+
+(def concat (xs)
+  (if (null xs)
+      (empty-form xs)
+      (append (car xs) (concat (cdr xs)))))
 
 (def pair (xs)
   (if (no xs)
@@ -73,10 +91,19 @@
       (cons (list (car xs) (cadr xs))
         (pair (cddr xs)))))
 
+(def unpair (xs)
+  (if (no xs) nil
+      (with (a (caar xs)
+             b (cadar xs))
+        (cons a (cons b (unpair (cdr xs)))))))
+
 (def map1 (f xs)
   (if (no xs)
       nil
       (cons (f (car xs)) (map1 f (cdr xs)))))
+
+(def testify (arg)
+  (if (procedure? arg) arg [is _ arg]))
 
 (def all (test xs)
   (let f (testify test)
@@ -90,9 +117,19 @@
         (f (car xs)) #t
         (any test (cdr xs)))))
 
+(def last (xs)
+  (if (null (cdr xs))
+      (car xs)
+      (last (cdr xs))))
+
+(def init (xs)
+  (if (null (cdr xs))
+      (empty-form xs)
+      (cons (car xs) (init (cdr xs)))))
+
 (def snoc (x lst)
   (if (null lst)
-      (list x)
+      (unit-form x lst)
       (cons (car lst) (snoc x (cdr lst)))))
 
 (def append (a b)
@@ -123,14 +160,20 @@
       (cons (take n xs)
             (tuples (nthcdr n xs) n))))
 
+(def intersperse (x xs)
+  (if (null xs) (empty-form xs)
+      (null (cdr xs)) xs
+      (cons
+        (car xs)
+        (cons x (intersperse x (cdr xs))))))
+
+(def intercalate (xs xss)
+  (concat (intersperse xs xss)))
+
 ;;;; Control flow
 
 (macro do args
   `((fn () ,@args)))
-
-(macro do* args
-  (if (no args) `nil
-      `(cons ,(car args) (do* ,@(cdr args)))))
 
 (macro when (test . body)
   `(if ,test (do ,@body)))
@@ -191,6 +234,18 @@
 
 (macro case (expr . args)
   `(caselet ,(uniq) ,expr ,@args))
+
+;;;; Dispatch on type
+
+; (macro dispatch-on-type args
+;   (w/uniq arg f
+;     `(let ,f (fn (c))
+
+; (def f
+;   (fn (arg)
+;     (case (type arg)
+;       'number (apply f1 arg)
+;       'string (apply f2 arg))))
 
 ;;;; Folds and scans
 
@@ -270,7 +325,17 @@
     hash   (elem-lst x (keys xs)) ; This is O(n) rather than O(log n) but ok for now
     #f))
 
-;;;; Control flow (execute in a local environment)
+;;;; Control flow (scope)
+
+(macro do1 args
+  (w/uniq result
+    `(let ,result ,(car args)
+      (do ,@(cdr args) ,result))))
+
+(macro do* args
+  (if (no args)
+      `nil
+      `(cons ,(car args) (do* ,@(cdr args)))))
 
 (macro local exprs
   (w/uniq g
@@ -428,9 +493,6 @@
 
 ;;;; List filtering operations
 
-(def testify (arg)
-  (if (procedure? arg) arg [is _ arg]))
-
 (def keep (pred lst)
   (let test (testify pred)
     (foldr
@@ -463,6 +525,25 @@
             (apply zip (map1 cdr args)))))
 
 (def unzip (lst) (apply zip lst))
+
+(def hash-keys keys)
+(def hash-vals vals)
+
+(def keys (arg)
+  (case (type arg)
+    hash (hash-keys arg)
+    pair (map car arg)))
+
+(def vals (arg)
+  (case (type arg)
+    hash (hash-vals arg)
+    pair (map cadr arg)))
+
+(def hash->alist (m)
+  (zip (keys m) (vals m)))
+
+(def alist->hash (al)
+  (apply hash (unpair al)))
 
 ;;;; Assignment and modification
 
