@@ -90,6 +90,4 @@
 (assert (inexact? (+ 2 1.5))    "Inexactness contaminates exactness")
 (assert (inexact? (+ 1.0 1.0))  "Can't get exact answers from inexact arguments")
 
-(assert (integer? 1.0) "This should fail" "Another line of output" 1.0)
-
 )

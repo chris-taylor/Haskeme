@@ -39,17 +39,17 @@
 
 ;;;; Type checking
 
-(def symbol? (x)    (isa x 'symbol))
-(def pair? (x)      (isa x 'pair))
-(def boolean? (x)   (isa x 'boolean))
-(def char? (x)      (isa x 'char))
-(def string? (x)    (isa x 'string))
-(def number? (x)    (isa x 'number))
-(def vector? (x)    (isa x 'vector))
-(def hash? (x)      (isa x 'hash))
-(def procedure? (x) (isa x 'procedure))
-(def port? (x)      (isa x 'port))
-(def exception? (x) (isa x 'exception))
+(def symbol?    [isa _ 'symbol])
+(def pair?      [isa _ 'pair])
+(def boolean?   [isa _ 'boolean])
+(def char?      [isa _ 'char])
+(def string?    [isa _ 'string])
+(def number?    [isa _ 'number])
+(def vector?    [isa _ 'vector])
+(def hash?      [isa _ 'hash])
+(def procedure? [isa _ 'procedure])
+(def port?      [isa _ 'port])
+(def exception? [isa _ 'exception])
 
 ;;;; String constructor
 
@@ -60,7 +60,7 @@
 
 (def list objs objs)
 
-(def alist (obj)
+(def list? (obj)
   (or (is obj nil)
       (is (type obj) 'pair)))
 
@@ -78,11 +78,6 @@
 (def null (obj)
   (is obj (empty-form obj)))
 
-(def concat (xs)
-  (if (null xs)
-      (empty-form xs)
-      (append (car xs) (concat (cdr xs)))))
-
 (def pair (xs)
   (if (no xs)
         nil
@@ -96,6 +91,22 @@
       (with (a (caar xs)
              b (cadar xs))
         (cons a (cons b (unpair (cdr xs)))))))
+
+(def flatten1 (xs)
+  (if (no xs) nil
+      ; else
+      (let x (car xs)
+        (if (list? x) (append x (flatten1 (cdr xs)))
+            ; else
+            (cons x (flatten1 (cdr xs)))))))
+
+(def flatten (xs)
+  (if (no xs) nil
+      ; else
+      (let x (car xs)
+        (if (list? x) (append (flatten x) (flatten (cdr xs)))
+            ; else
+            (cons x (flatten (cdr xs)))))))
 
 (def map1 (f xs)
   (if (no xs)
@@ -133,9 +144,15 @@
       (cons (car lst) (snoc x (cdr lst)))))
 
 (def append (a b)
-  (if (null b)
-      a
-      (append (snoc (car b) a) (cdr b))))
+  (if (null a)
+      b
+      (cons (car a)
+            (append (cdr a) b))))
+
+(def concat (xs)
+  (if (null xs)
+      (empty-form xs)
+      (append (car xs) (concat (cdr xs)))))
 
 (def take (n xs)
   (if (is n 0)
@@ -227,15 +244,14 @@
 
 ;;;; Dispatch on type
 
-; (macro dispatch-on-type args
-;   (w/uniq arg f
-;     `(let ,f (fn (c))
-
-; (def f
-;   (fn (arg)
-;     (case (type arg)
-;       'number (apply f1 arg)
-;       'string (apply f2 arg))))
+(macro dispatch (name args . body)
+  (def create-fun-call (p args)
+    (case (len p)
+      1 p
+      2 `(,(car p) (,(cadr p) ,@args))))
+  `(def ,name ,args
+    (if ,@(flatten1 (map1 [create-fun-call _ args]
+                          (pair body))))))
 
 ;;;; Folds and scans
 
@@ -323,13 +339,12 @@
       (is x (car xs)) #t
       (elem-lst x (cdr xs))))
 
-(def elem (x xs)
-  (case (type xs)
-    pair   (elem-lst x xs)
-    vector (elem-lst x xs)
-    string (elem-lst x xs)
-    hash   (elem-lst x (keys xs)) ; This is O(n) rather than O(log n) but ok for now
-    #f))
+(dispatch elem (x xs)
+  (list? xs)   elem-lst
+  (vector? xs) elem-lst
+  (string? xs) elem-lst
+  (hash? xs)   hash-elem
+  (raise-exception 'type "list, vector, string or hash" xs))
 
 ;;;; Control flow (scope)
 
@@ -372,7 +387,7 @@
   `(for ,var 0 (- (len ,s) 1) ,@body))
 
 (def walk (seq func)
-  (if (alist seq)
+  (if (list? seq)
       ((afn (l)
         (when (pair? l)
           (func (car l))
@@ -518,9 +533,9 @@
   (def iter (cts lst)
     (if (no lst) cts
         (let hd (car lst)
-          (if (elem hd cts)
-              (iter (update hd inc cts) (cdr lst))
-              (iter (insert hd 1 cts)   (cdr lst))))))
+          (if (hash-elem hd cts)
+              (iter (hash-update hd inc cts) (cdr lst))
+              (iter (hash-insert hd 1 cts)   (cdr lst))))))
   (iter #() xs))
 
 ;;;; Association Lists
@@ -532,35 +547,56 @@
 
 (def unzip (lst) (apply zip lst))
 
-(def hash-keys keys)
-(def hash-vals vals)
+(def hash->alist [zip (keys _) (vals _)])
 
-(def keys (arg)
-  (case (type arg)
-    hash (hash-keys arg)
-    pair (map car arg)))
+(def alist->hash [apply hash (unpair _)])
 
-(def vals (arg)
-  (case (type arg)
-    hash (hash-vals arg)
-    pair (map cadr arg)))
+(def alist-keys [map car _])
 
-(def hash->alist (m)
-  (zip (keys m) (vals m)))
+(def alist-vals [map cadr _])
 
-(def alist->hash (al)
-  (apply hash (unpair al)))
+(def alist-contains-key (k al)
+  (if (no al) #f
+      (is (caar al) k) #t
+      (alist-contains-key k (cdr al))))
 
-(def lookup (k m)
-  (if (no m) nil
-      (if (is (caar m) k) (cadar m)
-          (lookup k (cdr m)))))
+(def alist-lookup (k al)
+  (def impl (xs)
+    (if (no xs)          (raise-exception 'keynotfound k al)
+        (is (caar xs) k) (cadar xs)
+        (impl (cdr xs))))
+  (impl al))
 
-(def hash-insert insert)
+(def alist-insert (k v al)
+  (if (no al)          (list (list k v))
+      (is (caar al) k) (cons (list k v) (cdr al))
+      ; else
+      (cons (car al) (alist-insert k v (cdr al)))))
 
-(def insert (k v m)
-  (if (hash? m) (hash-insert k v m)
-      (alist m) (cons (list k v) m)))
+(dispatch keys (arg)
+  (hash? arg) hash-keys
+  (list? arg) alist-keys
+  (raise-exception 'type "hash or list" arg))
+
+(dispatch vals (arg)
+  (hash? arg) hash-vals
+  (list? arg) alist-vals
+  (raise-exception 'type "hash or list" arg))
+
+(dispatch lookup (k arg)
+  (hash? arg) hash-lookup
+  (list? arg) alist-lookup
+  (raise-exception 'type "hash or list" arg))
+
+(dispatch insert (k v arg)
+  (hash? arg) hash-insert
+  (list? arg) alist-insert
+  (raise-exception 'type "hash or list" arg))
+
+(dispatch contains-key (k arg)
+  (hash? arg) hash-elem
+  (list? arg) alist-contains-key
+  (raise-exception 'type "hash or list" arg))
 
 ;;;; Assignment and modification
 
@@ -607,15 +643,13 @@
    handlers))
 
 (macro handler args
-  (w/uniq e
-    `(fn (,e)
-      (def e ,e)
-      (case (exception-type ,e) ,@args))))
+  `(fn (e)  ;; We are deliberately NOT using w/uniq, so that we bind e
+    (case (exception-type e) ,@args)))
 
 ;;;; Tests
 
 (def test-handler
-  (handler
+  (handler  ;; Binds e to the exception received (see defn of handler above)
     assert (do
       (prn "Test failed: " (car (exception-args e)))
       (map [prn "  " _]    (cdr (exception-args e)))
@@ -627,14 +661,20 @@
       (prn)
       'fail)))
 
+(def make-test (code)
+  `(w/handler test-handler
+    (local ,code)))
+
 (macro run-tests (name . tests)
-  (w/uniq (results cts)
-    (let code `(do* ,@(map1 (fn (c) `(w/handler test-handler ,c)) tests))
-      `(local
-        (prn "Running tests: " ,name "\n")
-        (def ,results ,code)
-        (def ,cts (hist ,results))
-        (prn "Tests passed: "
-          (if (elem 'ok ,cts) (,cts 'ok) 0))
-        (prn "Tests failed: "
-          (if (elem 'fail ,cts) (,cts 'fail) 0))))))
+  (w/uniq (cts num-pass num-fail total)
+    (let code `(do* ,@(map1 make-test tests))
+      `(do
+        (prn "\nRunning tests: " ,name "\n")
+        (def ,cts (hist ,code))
+        (withs (,num-pass (if (elem 'ok ,cts) (,cts 'ok) 0)
+                ,num-fail (if (elem 'fail ,cts) (,cts 'fail) 0)
+                ,total (+ ,num-pass ,num-fail))
+          (prn "Tests passed: " ,num-pass
+            " (" (* 100.0 (/ ,num-pass ,total)) "%)")
+          (prn "Tests failed: " ,num-fail
+            " (" (* 100.0 (/ ,num-fail ,total)) "%)"))))))

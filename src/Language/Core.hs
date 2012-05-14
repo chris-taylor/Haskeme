@@ -35,7 +35,6 @@ eval env (List (Atom "load" : params))          = evalLoad env params
 -- Here for debugging
 eval env (List [Atom "expand", code])  = meval env code >>= expandAll env
 eval env (List [Atom "expand1", code]) = meval env code >>= expandOne env
-eval env (List [Atom "show-env"])            = showNamespace env (String "v") >> showNamespace env (String "m")
 eval env (List [Atom "show-env", namespace]) = showNamespace env namespace
 -- End debug section
 eval env (List (function : args)) = evalApplication env function args
@@ -69,7 +68,7 @@ evalIf env args@(test : rest) = do
     evalIf' newEnv (truthVal it) rest
 
 evalIf' :: Env -> Bool -> [LispVal] -> IOThrowsError LispVal
-evalIf' env truth [conseq]        = evalIf' env truth [conseq, Bool False]
+evalIf' env truth [conseq]        = evalIf' env truth [conseq, lispFalse]
 evalIf' env truth [conseq, alt]   = if truth
     then meval env conseq
     else meval env alt
@@ -150,7 +149,6 @@ macroExpand env val = return val
 
 genericExpand :: (Env -> LispVal -> IOThrowsError LispVal) -> Env -> LispVal -> IOThrowsError LispVal
 genericExpand continue env val@(List (Atom name : args)) = do
-    --local <- liftIO $ readIORef env
     result <- liftIO $ macRecLookup name env
     maybe (return val)
           (\macroRef -> do
@@ -165,14 +163,14 @@ expandOne = genericExpand (\_ -> return)
 expandAll :: Env -> LispVal -> IOThrowsError LispVal
 expandAll = genericExpand macroExpand
 
---expandAtom :: Env -> LispVal -> IOThrowsError LispVal
---expandAtom envRef val@(Atom name) = do
---    env <- liftIO $ readIORef envRef
---    maybe (return val)
---          (\macroRef -> do
---            macro <- liftIO $ readIORef macroRef
---            returnQuoted macro)
---          (macroLookup name env)
+expandAtom :: Env -> LispVal -> IOThrowsError LispVal
+expandAtom env val@(Atom name) = do
+    result <- liftIO $ macRecLookup name env
+    maybe (return val)
+          (\macroRef -> do
+            macro <- liftIO $ readIORef macroRef
+            returnQuoted macro)
+          (result)
 
 -- Combined eval and expand
 

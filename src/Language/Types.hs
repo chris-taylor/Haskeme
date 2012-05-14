@@ -8,8 +8,9 @@ module Language.Types (
     , Env (..), EnvType, Namespace, Var
     , ThrowsError, IOThrowsError
     , errTypeMismatch, errNumArgs, errUser
-    , showVal, nil, eqv, unwordsList, pairs, unpairs, truthVal, typeName, errorName, nullEnv
-    , trapError, extractValue, liftThrows, runIOThrows, runIOThrowsCompile
+    , unwordsList, pairs, unpairs
+    , showVal, nil, eqv, truthVal, lispFalse, typeName, errorName, nullEnv
+    , showError, trapError, extractValue, liftThrows, runIOThrows, runIOThrowsCompile
     ) where
 
 import IO
@@ -253,6 +254,9 @@ instance Show ([LispVal] -> IOThrowsError LispVal) where
     show _ = "<ioPrimitive>"
 
 -- Truth values (used in 'if special form)
+
+lispFalse :: LispVal
+lispFalse = List [Atom "quote", List []]
 
 truthVal :: LispVal -> Bool
 truthVal (Bool False) = False

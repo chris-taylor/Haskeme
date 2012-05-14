@@ -46,7 +46,7 @@ ioPrimitives = [ ("apply", applyProc)
                , ("file-exists", fileExists)
                , ("delete-file", deleteFile)
                -- Hash functions
-               , ("update", hashUpdate)
+               , ("hash-update", hashUpdate)
                -- Random numbers and unique symbols
                , ("random", rand)
                , ("uniq", gensym) ]
@@ -140,9 +140,11 @@ primitives = numericPrimitives ++
              , ("vector", vector)
              -- Hashes
              , ("hash", hash)
-             , ("keys", unaryOp keys)
-             , ("vals", unaryOp vals)
-             , ("insert", hashInsert)
+             , ("hash-keys", unaryOp keys)
+             , ("hash-vals", unaryOp vals)
+             , ("hash-insert", hashInsert)
+             , ("hash-lookup", hashLookup)
+             , ("hash-elem", hashElem)
              -- Polymorphic length
              , ("len", len)
              -- Type conversion
@@ -163,7 +165,7 @@ primitives = numericPrimitives ++
              , ("raise", raiseException)
              -- Comparison operators
              , ("is", is)
-             , ("iso", equal) ]
+             , ("iso", iso) ]
 
 typeOf :: [LispVal] -> ThrowsError LispVal
 typeOf xs = case xs of
@@ -182,7 +184,7 @@ exceptionType badArgs  = throwError $ NumArgs 1 badArgs
 
 exceptionArgs :: [LispVal] -> ThrowsError LispVal
 exceptionArgs [Exception (UserError _ args)] = return $ List args
-exceptionArgs [Exception _]                  = return $ nil
+exceptionArgs [Exception e]                  = return $ List [String $ showError e]
 exceptionArgs [notException]                 = throwError $ TypeMismatch "exception" notException
 exceptionArgs badArgs                        = throwError $ NumArgs 1 badArgs
 
@@ -366,6 +368,18 @@ hashInsert [key, val, Hash hash] = return $ Hash $ Map.insert key val hash
 hashInsert [key, val, notHash]   = errTypeMismatch "hash" notHash
 hashInsert badArgs               = errNumArgs 3 badArgs
 
+hashLookup :: [LispVal] -> ThrowsError LispVal
+hashLookup [key, Hash hash] = case Map.lookup key hash of
+    Just val -> return val
+    Nothing  -> throwError $ KeyNotFound key (Hash hash)
+hashLookup [key, notHash]   = errTypeMismatch "hash" notHash
+hashLookup badArgs          = errNumArgs 2 badArgs
+
+hashElem :: [LispVal] -> ThrowsError LispVal
+hashElem [key, Hash hash] = return $ Bool $ Map.member key hash
+hashElem [key, notHash]   = errTypeMismatch "hash" notHash
+hashElem badArgs          = errNumArgs 2 badArgs
+
 hashUpdate :: [LispVal] -> IOThrowsError LispVal
 hashUpdate [key, func, Hash hash] = if Map.member key hash
     then case typeName func of
@@ -448,21 +462,22 @@ is [Complex arg1, Complex arg2] = return $ Bool $ arg1 == arg2
 is [DottedList xs x, DottedList ys y] = listEquals is (xs++[x]) (ys++[y])
 is [Vector xs, Vector ys]             = listEquals is (elems xs) (elems ys)
 is [List xs, List ys]                 = listEquals is xs ys
+is [Hash xs, Hash ys]                 = return $ Bool $ xs == ys
 is [_ , _] = return $ Bool False
 is badArgs = throwError $ NumArgs 2 badArgs
 
-equal :: [LispVal] -> ThrowsError LispVal
-equal [DottedList xs x, DottedList ys y] = listEquals equal (xs++[x]) (ys++[y])
-equal [Vector xs, Vector ys]             = listEquals equal (elems xs) (elems ys)
-equal [List xs, List ys]                 = listEquals equal xs ys
-equal [arg1, arg2] = do
+iso :: [LispVal] -> ThrowsError LispVal
+iso [DottedList xs x, DottedList ys y] = listEquals iso (xs++[x]) (ys++[y])
+iso [Vector xs, Vector ys]             = listEquals iso (elems xs) (elems ys)
+iso [List xs, List ys]                 = listEquals iso xs ys
+iso [arg1, arg2] = do
     primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2)
                        [AnyUnpacker unpackNum, AnyUnpacker unpackRat,
                         AnyUnpacker unpackFloat, AnyUnpacker unpackCplx,
                         AnyUnpacker unpackStr, AnyUnpacker unpackBool]
     eqvEquals <- is [arg1, arg2]
     return $ Bool $ (primitiveEquals || let (Bool x) = eqvEquals in x)
-equal badArgs = throwError $ NumArgs 2 badArgs
+iso badArgs = throwError $ NumArgs 2 badArgs
 
 -- Helper functions
 
