@@ -160,16 +160,6 @@
       (cons (take n xs)
             (tuples (nthcdr n xs) n))))
 
-(def intersperse (x xs)
-  (if (null xs) (empty-form xs)
-      (null (cdr xs)) xs
-      (cons
-        (car xs)
-        (cons x (intersperse x (cdr xs))))))
-
-(def intercalate (xs xss)
-  (concat (intersperse xs xss)))
-
 ;;;; Control flow
 
 (macro do args
@@ -295,6 +285,22 @@
 
 (def join args
   (foldr append '() args))
+
+(def intersperse (x xs)
+  (if (null xs) (empty-form xs)
+      (null (cdr xs)) xs
+      (cons
+        (car xs)
+        (cons x (intersperse x (cdr xs))))))
+
+(def intercalate (xs xss)
+  (concat (intersperse xs xss)))
+
+(def subsequences (xs)
+  (if (no xs) (list nil)
+      (let subs (subsequences (cdr xs))
+        (append (map [cons (car xs) _] subs)
+                subs))))
 
 ; W/UNIQ Binds a unique symbol name to each PARAMS (useful in macros)
 
