@@ -129,7 +129,7 @@ evalMDefine :: (Env -> String -> LispVal -> IOThrowsError LispVal)
     -> LispVal -> [LispVal] -> EvalM LispVal
 evalMDefine definer (Atom var) [form] = do
     env <- getEnv
-    lift $ meval env form >>= definer env var
+    mevalM form >>= lift . definer env var
 evalMDefine definer (Atom var) (List params : body) = do
     env <- getEnv
     lift $ makeNormalFunc env params body >>= definer env var
@@ -143,13 +143,13 @@ evalMDefine definer (Atom var) (varargs@(Atom _) : body) = do
 evalMSet :: [LispVal] -> EvalM LispVal
 evalMSet [Atom var, form] = do
     env <- getEnv
-    lift $ meval env form >>= setVar env var
+    mevalM form >>= lift . setVar env var
 evalMSet [List [Atom "car", Atom var], form] = do
     env <- getEnv
-    lift $ meval env form >>= setCar env var
+    mevalM form >>= lift . setCar env var
 evalMSet [List [Atom "cdr", Atom var], form] = do
     env <- getEnv
-    lift $ meval env form >>= setCdr env var
+    mevalM form >>= lift . setCdr env var
 evalMSet [List [Atom var, form1], form2] = do
     key <- mevalM form1
     val <- mevalM form2
@@ -166,7 +166,7 @@ evalMTry [expr, handler] = do
 
 evalMLoad :: [LispVal] -> EvalM LispVal
 evalMLoad [arg] = do
-    result <- evalM arg
+    result <- mevalM arg
     case result of
         (String filename) -> (lift $ load filename) >>= liftM last . mapM mevalM
         other             -> lift $ errTypeMismatch "string" other
