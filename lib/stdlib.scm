@@ -538,6 +538,35 @@
               (iter (hash-insert hd 1 cts)   (cdr lst))))))
   (iter #() xs))
 
+;;;; Error checking
+
+(def raise-exception args
+  (raise (apply new-exception args)))
+
+(macro assert (test . rest)
+  `(if ,test 'ok
+       (raise-exception 'assert ,@rest)))
+
+(macro assert-false (test . rest)
+  `(assert (not ,test) ,@rest))
+
+(macro assert-equal (fst snd . rest)
+  `(assert (is ,fst ,snd) ,@rest))
+
+(macro w/handler (handler . exprs)
+  `(try (do ,@exprs) ,handler))
+
+(macro w/handlers (handlers . exprs)
+  ((afn (hs)
+    (if (no (cdr hs))
+        `(w/handler ,(car hs) ,@exprs)
+        `(w/handler ,(car hs) ,(self (cdr hs)))))
+   handlers))
+
+(macro handler args
+  `(fn (e)  ;; We are deliberately NOT using w/uniq, so that we bind e
+    (case (exception-type e) ,@args)))
+
 ;;;; Association Lists
 
 (def zip args
@@ -616,35 +645,6 @@
 
 (macro push (val lst)
   `(= ,lst (cons ,val ,lst)))
-
-;;;; Error checking
-
-(def raise-exception args
-  (raise (apply new-exception args)))
-
-(macro assert (test . rest)
-  `(if ,test 'ok
-       (raise-exception 'assert ,@rest)))
-
-(macro assert-false (test . rest)
-  `(assert (not ,test) ,@rest))
-
-(macro assert-equal (fst snd . rest)
-  `(assert (is ,fst ,snd) ,@rest))
-
-(macro w/handler (handler . exprs)
-  `(try (do ,@exprs) ,handler))
-
-(macro w/handlers (handlers . exprs)
-  ((afn (hs)
-    (if (no (cdr hs))
-        `(w/handler ,(car hs) ,@exprs)
-        `(w/handler ,(car hs) ,(self (cdr hs)))))
-   handlers))
-
-(macro handler args
-  `(fn (e)  ;; We are deliberately NOT using w/uniq, so that we bind e
-    (case (exception-type e) ,@args)))
 
 ;;;; Tests
 

@@ -45,3 +45,9 @@ Executable          haski
     Extensions:     ExistentialQuantification
     Main-is:        Main.hs
     Hs-Source-Dirs: src/Interpreter
+
+Executable          haskm
+    Build-Depends:  haskeme, base, parsec, mtl, haskell98, containers, array, random, directory
+    Extensions:     ExistentialQuantification
+    Main-is:        Main.hs
+    Hs-Source-Dirs: src/MonadicInterpreter

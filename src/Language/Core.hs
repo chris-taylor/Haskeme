@@ -1,6 +1,7 @@
-module Language.Core (eval, macroExpand, apply, load) where
+module Language.Core (eval, evalM, mevalM, macroExpand, apply, load) where
 
 import Control.Monad.Error
+import Control.Monad.State as S
 import System.Directory (doesFileExist)
 import Data.Array
 import Data.IORef
@@ -9,6 +10,175 @@ import qualified Data.Map as Map
 import Language.Types
 import Language.Parser
 import Language.Variables
+
+-- Monadic functions
+
+newRef :: a -> EvalM (IORef a)
+newRef = lift . lift . newIORef
+
+readRef :: IORef a -> EvalM a
+readRef = lift . lift . readIORef
+
+writeRef :: IORef a -> a -> EvalM ()
+writeRef ref = lift . lift . writeIORef ref
+
+-- 
+
+bindM :: (Var, LispVal) -> EvalM ()
+bindM (var, val) = do
+    env <- getEnv
+    ref <- newRef val
+    bds <- readRef (bindings env)
+    writeRef (bindings env) $ varInsert var ref bds
+
+getEnv :: EvalM Env
+getEnv = S.get
+
+-- Monadic evaluation -- EXPERIMENTAL
+
+mevalM :: LispVal -> EvalM LispVal
+mevalM form = do
+    env <- getEnv
+    (lift $ macroExpand env form) >>= evalM
+
+evalM :: LispVal -> EvalM LispVal
+evalM val@(String _)  = return val
+evalM val@(Number _)  = return val
+evalM val@(Char _)    = return val
+evalM val@(Ratio _)   = return val
+evalM val@(Float _)   = return val
+evalM val@(Complex _) = return val
+evalM val@(Bool _)    = return val
+evalM val@(Vector _)  = return val
+evalM val@(Hash _)    = return val
+evalM val@(Atom var)  = getEnv >>= lift . flip getVar var
+evalM (List (Atom "quote" : args))       = evalMQuote args
+evalM (List [Atom "quasiquote",  args])  = evalMQQ 1 args
+evalM (List (Atom "if" : args))          = evalMIf args
+evalM (List (Atom "fn" : params : body)) = evalMFn params body
+evalM (List (Atom "def" : var : rest))   = evalMDefine defineVar var rest
+evalM (List (Atom "macro" : var : rest)) = evalMDefine defineMacro var rest
+evalM (List (Atom "=" : args))           = evalMSet args
+evalM (List (Atom "try" : args))         = evalMTry args
+evalM (List (Atom "load" : params))      = evalMLoad params
+-- Here for debugging
+evalM (List [Atom "expand", code])  = mevalM code >>= (\v -> do
+    env <- getEnv
+    lift $ expandAll env v)
+evalM (List [Atom "expand1", code]) = mevalM code >>= (\v -> do
+    env <- getEnv
+    lift $ expandOne env v)
+evalM (List [Atom "show-env", namespace]) = do
+    env <- getEnv
+    lift $ showNamespace env namespace
+-- End debug section
+evalM (List (function : args))           = evalMApplication function args
+evalM badForm = lift $ throwError $ BadSpecialForm "Unrecognized special form" badForm
+
+evalMApplication :: LispVal -> [LispVal] -> EvalM LispVal
+evalMApplication function args = do
+    func <- mevalM function
+    mapM mevalM args >>= (\v -> lift $ apply func v)
+
+evalMQuote :: [LispVal] -> EvalM LispVal
+evalMQuote [val]   = return val
+evalMQuote badArgs = lift $ errNumArgs 1 badArgs
+
+evalMQQ :: Int -> LispVal -> EvalM LispVal
+evalMQQ 0 val = mevalM val
+evalMQQ n (List [Atom "quasiquote", val]) = evalMQQ (n+1) val
+evalMQQ n (List [Atom "unquote", val])    = evalMQQ (n-1) val
+evalMQQ n (List vals) = liftM (List . concat) $ mapM (evalMQQList n) vals
+evalMQQ n val = return val
+
+evalMQQList :: Int -> LispVal -> EvalM [LispVal]
+--evalMQQList 0 val = liftM return $ mevalM env val
+evalMQQList n (List [Atom "quasiquote", val]) = liftM return $ evalMQQ (n+1) val
+evalMQQList n (List [Atom "unquote", val])    = liftM return $ evalMQQ (n-1) val
+evalMQQList n (List [Atom "unquotesplicing", val]) = do
+    result <- evalMQQ (n-1) val
+    case result of
+        (List xs) -> return xs
+        notList   -> throwError $ TypeMismatch "list" notList
+evalMQQList n (List vals) = liftM (return . List . concat) $ mapM (evalMQQList n) vals
+evalMQQList n val = return $ return val
+
+evalMIf :: [LispVal] -> EvalM LispVal
+evalMIf args@(test : rest) = do
+    it <- mevalM test
+    bindM ("it", it)
+    evalMIf' (truthVal it) rest
+
+evalMIf' :: Bool -> [LispVal] -> EvalM LispVal
+evalMIf' truth [conseq]        = evalMIf' truth [conseq, lispFalse]
+evalMIf' truth [conseq, alt]   = if truth then mevalM conseq else mevalM alt
+evalMIf' truth (conseq : rest) = if truth then mevalM conseq else evalMIf rest
+
+evalMFn :: LispVal -> [LispVal] -> EvalM LispVal
+evalMFn (List params) body = do
+    env <- getEnv
+    lift $ makeNormalFunc env params body
+evalMFn (DottedList params varargs) body = do
+    env <- getEnv
+    lift $ makeVarArgs varargs env params body
+evalMFn varargs@(Atom _) body = do
+    env <- getEnv
+    lift $ makeVarArgs varargs env [] body
+
+evalMDefine :: (Env -> String -> LispVal -> IOThrowsError LispVal)
+    -> LispVal -> [LispVal] -> EvalM LispVal
+evalMDefine definer (Atom var) [form] = do
+    env <- getEnv
+    lift $ meval env form >>= definer env var
+evalMDefine definer (Atom var) (List params : body) = do
+    env <- getEnv
+    lift $ makeNormalFunc env params body >>= definer env var
+evalMDefine definer (Atom var) (DottedList params varargs : body) = do
+    env <- getEnv
+    lift $ makeVarArgs varargs env params body >>= definer env var
+evalMDefine definer (Atom var) (varargs@(Atom _) : body) = do
+    env <- getEnv
+    lift $ makeVarArgs varargs env [] body >>= definer env var
+
+evalMSet :: [LispVal] -> EvalM LispVal
+evalMSet [Atom var, form] = do
+    env <- getEnv
+    lift $ meval env form >>= setVar env var
+evalMSet [List [Atom "car", Atom var], form] = do
+    env <- getEnv
+    lift $ meval env form >>= setCar env var
+evalMSet [List [Atom "cdr", Atom var], form] = do
+    env <- getEnv
+    lift $ meval env form >>= setCdr env var
+evalMSet [List [Atom var, form1], form2] = do
+    key <- mevalM form1
+    val <- mevalM form2
+    env <- getEnv
+    lift $ setIndex env var key val
+evalMSet [other, _] = lift $ errTypeMismatch "atom or list" other
+evalMSet badArgs    = lift $ errNumArgs 2 badArgs
+
+evalMTry :: [LispVal] -> EvalM LispVal
+evalMTry [expr, handler] = do
+    env <- getEnv
+    lift $ meval env expr `catchError` \err ->
+        meval env handler >>= flip apply [Exception err]
+
+evalMLoad :: [LispVal] -> EvalM LispVal
+evalMLoad [arg] = do
+    result <- evalM arg
+    case result of
+        (String filename) -> (lift $ load filename) >>= liftM last . mapM mevalM
+        other             -> lift $ errTypeMismatch "string" other
+evalMLoad args  = lift $ errNumArgs 1 args
+
+--evalLoad :: Env -> [LispVal] -> IOThrowsError LispVal
+--evalLoad env [arg] = do
+--    result <- eval env arg
+--    case result of
+--        (String filename) -> load filename >>= liftM last . mapM (meval env)
+--        other             -> throwError $ TypeMismatch "string" other
+--evalLoad env args = throwError $ NumArgs 1 args
 
 -- Evaluation
 

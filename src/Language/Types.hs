@@ -1,5 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction, TypeSynonymInstances,
-    FlexibleInstances, FlexibleContexts #-}
+    FlexibleInstances, FlexibleContexts, MultiParamTypeClasses,
+    FunctionalDependencies #-}
 
 module Language.Types (
       LispVal (..)
@@ -7,6 +8,7 @@ module Language.Types (
     , VectorType, HashType
     , Env (..), EnvType, Namespace, Var
     , ThrowsError, IOThrowsError
+    , EvalM
     , errTypeMismatch, errNumArgs, errUser
     , unwordsList, pairs, unpairs
     , showVal, nil, eqv, truthVal, lispFalse, typeName, errorName, nullEnv
@@ -22,6 +24,8 @@ import Complex
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec (ParseError)
 
+import Control.Monad.State
+
 type Namespace = String
 type Var = String
 
@@ -29,6 +33,35 @@ type EnvType = Map.Map (Namespace, Var) (IORef LispVal)
 
 data Env = Environment { parent :: Maybe Env
                        , bindings :: IORef EnvType }
+
+--- Monad Transformer stuff (experimental)
+
+--newtype EnvT e m a = EnvT { runEnvT :: e -> m a }
+
+--instance Monad m => Monad (EnvT e m) where
+--    return a = EnvT $ \_ -> return a
+--    m >>= f  = EnvT $ \e -> do
+--        a <- runEnvT m e
+--        runEnvT (f a) e
+
+--instance MonadTrans (EnvT e) where
+--    lift m = EnvT $ \_ -> m
+
+--class Monad m => MonadEnv e m | m -> e where
+--    rdEnv :: m e
+--    inEnv :: (e -> e) -> m a -> m a
+
+--instance Monad m => MonadEnv e (EnvT e m) where
+--    rdEnv     = EnvT $ return
+--    inEnv f m = EnvT $ \e -> runEnvT m (f e)
+
+--type EvalM = EnvT Env IOThrowsError
+
+-- StateT transformer stuff -- EXPERIMENTAL
+
+type EvalM = StateT Env IOThrowsError
+
+---
 
 nullEnv :: IO Env
 nullEnv = do
