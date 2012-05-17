@@ -1,18 +1,124 @@
 module Language.Variables where
 
+import Control.Monad.Error
+--import qualified Control.Monad.Reader as R
+--import qualified Control.Monad.State as S
+
 import Data.IORef
 import Data.Array
 import Data.Maybe (isJust)
 import qualified Data.Map as Map
-import Control.Monad.Error
 
 import Language.Types
+
+-- Functions that work within the EvalM monad
+
+newRef :: a -> EvalM (IORef a)
+newRef = lift . lift . newIORef
+
+readRef :: IORef a -> EvalM a
+readRef = lift . lift . readIORef
+
+writeRef :: IORef a -> a -> EvalM ()
+writeRef ref = lift . lift . writeIORef ref
+
+modifyRef :: (a -> a) -> IORef a -> EvalM ()
+modifyRef f ref = readRef ref >>= writeRef ref . f
+
+pushToStack :: IORef LispVal -> EvalM ()
+pushToStack val = getStack >>= modifyRef (val:)
+
+popFromStack :: EvalM (Maybe (IORef LispVal))
+popFromStack = getStack >>= \stackref -> do
+    stackval <- readRef stackref
+    if null stackval
+        then return Nothing
+        else do modifyRef tail stackref
+                return $ Just $ head stackval
+
+-- Functions to manipulate environments (bind/unbind variables etc)
+
+pushIfBound :: Var -> EvalM ()
+pushIfBound var = do
+    maybeVal <- getEnv >>= liftIO . localVarLookup var
+    case maybeVal of
+        Just val -> pushToStack val
+        Nothing  -> return ()
+
+popIfBound :: Var -> EvalM ()
+popIfBound var = do
+    maybeVal <- popFromStack
+    case maybeVal of
+        Just val -> getBindings >>= modifyRef (varInsert var val)
+        Nothing  -> return ()
+
+bindM :: (Var, LispVal) -> EvalM ()
+bindM (var, val) = do
+    valRef <- newRef val
+    pushIfBound var
+    getBindings >>= modifyRef (varInsert var valRef)
+
+unbindM :: Var -> EvalM ()
+unbindM var = do
+    getBindings >>= modifyRef (varRemove var)
+    popIfBound var
+
+-- Operations on environment implementation (i.e. underlying map)
 
 varNamespace = "v"
 macNamespace = "m"
 
+envIsBound :: Namespace -> Var -> EnvType -> Bool
+envIsBound namespace var env = Map.member (namespace, var) env
+
+envVarIsBound = envIsBound varNamespace
+envMacIsBound = envIsBound macNamespace
+
 envLookup :: Namespace -> Var -> EnvType -> Maybe (IORef LispVal)
 envLookup namespace var env = Map.lookup (namespace, var) env
+
+varLookup = envLookup varNamespace
+macroLookup = envLookup macNamespace 
+
+envInsert :: Namespace -> Var -> IORef LispVal -> EnvType -> EnvType
+envInsert namespace var val env = Map.insert (namespace, var) val env
+
+varInsert = envInsert varNamespace
+macroInsert = envInsert macNamespace
+
+envRemove :: Namespace -> Var -> EnvType -> EnvType
+envRemove namespace var env = Map.delete (namespace, var) env
+
+varRemove = envRemove varNamespace
+macRemove = envRemove macNamespace
+
+-- Operations on environments
+
+isBound :: Namespace -> Var -> Env -> IO Bool
+isBound namespace var env = readIORef (bindings env) >>=
+    return . envIsBound namespace var
+
+varIsBound = isBound varNamespace
+macroIsBound = isBound macNamespace
+
+isRecBound :: Namespace -> Var -> Env -> IO Bool
+isRecBound ns var env = isBound ns var env >>=
+    \result -> if result
+        then return True
+        else case parent env of
+            Nothing  -> return False
+            Just prt -> isRecBound ns var prt
+
+varIsRecBound = isRecBound varNamespace
+macIsRecBound = isRecBound macNamespace
+
+localLookup :: Namespace -> Var -> Env -> IO (Maybe (IORef LispVal))
+localLookup ns var env = do 
+    local <- readIORef (bindings env)
+    return $ envLookup ns var local
+
+localVarLookup = localLookup varNamespace
+localMacLookup = localLookup macNamespace
 
 recLookup :: Namespace -> Var -> Env -> IO (Maybe (IORef LispVal))
 recLookup ns var env = do
@@ -23,35 +129,8 @@ recLookup ns var env = do
             Nothing  -> return Nothing
             Just prt -> recLookup ns var prt
 
-varLookup = envLookup varNamespace
-macroLookup = envLookup macNamespace 
-
 varRecLookup = recLookup varNamespace
 macRecLookup = recLookup macNamespace
-
-envInsert :: Namespace -> Var -> IORef LispVal -> EnvType -> EnvType
-envInsert namespace var val env = Map.insert (namespace, var) val env
-
-varInsert = envInsert varNamespace
-macroInsert = envInsert macNamespace
-
-isBound :: Namespace -> Var -> Env -> IO Bool
-isBound namespace var env = readIORef (bindings env) >>=
-    return . isJust . envLookup namespace var
-
-isRecBound :: Namespace -> Var -> Env -> IO Bool
-isRecBound ns var env = isBound ns var env >>=
-    (\result -> if result
-        then return True
-        else case parent env of
-            Nothing  -> return False
-            Just prt -> isRecBound ns var prt)
-
-varIsBound = isBound varNamespace
-macroIsBound = isBound macNamespace
-
-varIsRecBound = isRecBound varNamespace
-macIsRecBound = isRecBound macNamespace
 
 get :: Namespace -> Env -> Var -> IOThrowsError LispVal
 get namespace env var = do
@@ -97,9 +176,11 @@ defineMacro = define macNamespace
 extendEnv :: [ (Var, LispVal) ] -> Env -> IO Env
 extendEnv []    env = return env
 extendEnv binds env = mapM mkBind binds >>= newIORef . Map.fromList >>=
-    return . Environment (Just env)
+    \bindings -> do
+        nullStack <- newIORef []
+        return $ Environment (Just env) nullStack bindings
     where mkBind (var, val) = newIORef val >>=
-            (\ref -> return (("v", var), ref) )
+            ( \ref -> return (("v", var), ref) )
 
 bindVars :: Env -> [(String,LispVal)] -> IO Env
 bindVars = flip extendEnv

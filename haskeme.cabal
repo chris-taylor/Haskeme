@@ -32,19 +32,7 @@ Library
                         Language.Parser
                         Language.Primitives
                         Language.HaskTypes
-                        Language.Compiler
-
-Executable          haskc
-    Build-Depends:  haskeme, base, parsec, mtl, haskell98, containers, array, random, directory
-    Extensions:     ExistentialQuantification
-    Main-is:        Main.hs
-    Hs-Source-Dirs: src/Compiler
-
-Executable          haski
-    Build-Depends:  haskeme, base, parsec, mtl, haskell98, containers, array, random, directory
-    Extensions:     ExistentialQuantification
-    Main-is:        Main.hs
-    Hs-Source-Dirs: src/Interpreter
+                        -- Language.Compiler
 
 Executable          haskm
     Build-Depends:  haskeme, base, parsec, mtl, haskell98, containers, array, random, directory

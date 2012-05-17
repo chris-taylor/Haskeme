@@ -29,9 +29,9 @@ primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc IOFunc) ioPrimiti
 -- Primitives that execute within the IO monad
 
 ioPrimitives :: [(String, [LispVal] -> IOThrowsError LispVal)]
-ioPrimitives = [ ("apply", applyProc)
+ioPrimitives = --[ ("apply", applyProc)
                -- Read/write
-               , ("write", writeProc)
+               [ ("write", writeProc)
                , ("read", readProc)
                -- Console output
                , ("pr", printProc putStr)
@@ -46,14 +46,14 @@ ioPrimitives = [ ("apply", applyProc)
                , ("file-exists", fileExists)
                , ("delete-file", deleteFile)
                -- Hash functions
-               , ("hash-update", hashUpdate)
+               --, ("hash-update", hashUpdate)
                -- Random numbers and unique symbols
                , ("random", rand)
                , ("uniq", gensym) ]
 
-applyProc :: [LispVal] -> IOThrowsError LispVal
-applyProc [func, List args] = apply func args
-applyProc (func : args)     = apply func args
+--applyProc :: [LispVal] -> IOThrowsError LispVal
+--applyProc [func, List args] = apply func args
+--applyProc (func : args)     = apply func args
 
 makePort :: IOMode -> [LispVal] -> IOThrowsError LispVal
 makePort mode [String filename] = asIO Port $ openFile filename mode
@@ -380,17 +380,17 @@ hashElem [key, Hash hash] = return $ Bool $ Map.member key hash
 hashElem [key, notHash]   = errTypeMismatch "hash" notHash
 hashElem badArgs          = errNumArgs 2 badArgs
 
-hashUpdate :: [LispVal] -> IOThrowsError LispVal
-hashUpdate [key, func, Hash hash] = if Map.member key hash
-    then case typeName func of
-        "procedure"  -> do
-            let oldValue = hash Map.! key
-            newValue <- apply func [oldValue]
-            return $ Hash $ Map.insert key newValue hash
-        notProcedure -> errTypeMismatch "procedure" func
-    else throwError $ KeyNotFound key (Hash hash)
-hashUpdate [key, func, notHash]   = errTypeMismatch "hash" notHash
-hashUpdate badArgs                = errNumArgs 3 badArgs 
+--hashUpdate :: [LispVal] -> IOThrowsError LispVal
+--hashUpdate [key, func, Hash hash] = if Map.member key hash
+--    then case typeName func of
+--        "procedure"  -> do
+--            let oldValue = hash Map.! key
+--            newValue <- apply func [oldValue]
+--            return $ Hash $ Map.insert key newValue hash
+--        notProcedure -> errTypeMismatch "procedure" func
+--    else throwError $ KeyNotFound key (Hash hash)
+--hashUpdate [key, func, notHash]   = errTypeMismatch "hash" notHash
+--hashUpdate badArgs                = errNumArgs 3 badArgs 
 
 -- Primitives
 

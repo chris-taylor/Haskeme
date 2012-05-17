@@ -2,7 +2,8 @@ module Main where
 
 import System.Environment
 import Control.Monad.Error
-import Control.Monad.State
+--import Control.Monad.Reader
+--import Control.Monad.State
 import System.IO
 import System.Info
 import Data.IORef
@@ -59,7 +60,7 @@ runOneM args = do
     loadLibraries env
     bindVars env [("args", List $ map String $ drop 1 args)]
     let thunk = mevalM (List [Atom "load", String (args !! 0)])
-    let evaledExpr = evalStateT thunk env
+    let evaledExpr = run thunk env
     result <- runIOThrows $ liftM show $ evaledExpr
     hPutStrLn stderr result
 
@@ -114,7 +115,13 @@ evalMExpr :: Env -> String -> IO String
 evalMExpr env expr = do
     let parsedExpr = lift . liftThrows $ readExpr expr
     let evaledExpr = parsedExpr >>= mevalM
-    runIOThrows $ liftM show $ (evalStateT evaledExpr) env
+    runIOThrows $ liftM show $ run evaledExpr env
+
+    --e <- runIOThrows $ liftM show $ run evaledExpr env
+    --p <- runIOThrows $ liftM show $ run parsedExpr env
+    --putStrLn $ "Reading: " ++ p
+    --putStrLn $ "Result:  " ++ e
+    --return e
 
 -- Utility functions
 

@@ -8,7 +8,7 @@ module Language.Types (
     , VectorType, HashType
     , Env (..), EnvType, Namespace, Var
     , ThrowsError, IOThrowsError
-    , EvalM
+    , EvalM, run, getEnv, getBindings, getStack, withEnv, inEnv
     , errTypeMismatch, errNumArgs, errUser
     , unwordsList, pairs, unpairs
     , showVal, nil, eqv, truthVal, lispFalse, typeName, errorName, nullEnv
@@ -24,7 +24,8 @@ import Complex
 import Control.Monad.Error
 import Text.ParserCombinators.Parsec (ParseError)
 
-import Control.Monad.State
+--import Control.Monad.State
+import Control.Monad.Reader
 
 type Namespace = String
 type Var = String
@@ -32,41 +33,35 @@ type Var = String
 type EnvType = Map.Map (Namespace, Var) (IORef LispVal)
 
 data Env = Environment { parent :: Maybe Env
+                       , stack :: IORef [IORef LispVal]
                        , bindings :: IORef EnvType }
 
---- Monad Transformer stuff (experimental)
+--- ReaderT monad transformer -- EXPERIMENTAL
 
---newtype EnvT e m a = EnvT { runEnvT :: e -> m a }
+type EvalM = ReaderT Env IOThrowsError
 
---instance Monad m => Monad (EnvT e m) where
---    return a = EnvT $ \_ -> return a
---    m >>= f  = EnvT $ \e -> do
---        a <- runEnvT m e
---        runEnvT (f a) e
+getEnv :: EvalM Env
+getEnv = ask
 
---instance MonadTrans (EnvT e) where
---    lift m = EnvT $ \_ -> m
+getBindings = getEnv >>= return . bindings
+getStack    = getEnv >>= return . stack
 
---class Monad m => MonadEnv e m | m -> e where
---    rdEnv :: m e
---    inEnv :: (e -> e) -> m a -> m a
+withEnv :: (Env -> Env) -> EvalM a -> EvalM a
+withEnv = local
 
---instance Monad m => MonadEnv e (EnvT e m) where
---    rdEnv     = EnvT $ return
---    inEnv f m = EnvT $ \e -> runEnvT m (f e)
+inEnv :: Env -> EvalM a -> EvalM a
+inEnv env = withEnv (const env)
 
---type EvalM = EnvT Env IOThrowsError
-
--- StateT transformer stuff -- EXPERIMENTAL
-
-type EvalM = StateT Env IOThrowsError
+run :: EvalM a -> Env -> IOThrowsError a
+run = runReaderT
 
 ---
 
 nullEnv :: IO Env
 nullEnv = do
     nullBindings <- newIORef Map.empty
-    return $ Environment Nothing nullBindings
+    nullStack    <- newIORef []
+    return $ Environment Nothing nullStack nullBindings
 
 type VectorType = Array Int LispVal
 type HashType = Map.Map LispVal LispVal
@@ -85,12 +80,12 @@ data LispVal = Atom String
              | Bool Bool
              | PrimitiveFunc String ([LispVal] -> ThrowsError LispVal)
              | IOFunc String ([LispVal] -> IOThrowsError LispVal)
-             | Func { params :: [String]
-                    , vararg :: Maybe String
+             | Func { params :: [Var]
+                    , vararg :: Maybe Var
                     , body :: [LispVal]
                     , closure :: Env }
-             | HFunc { hparams :: [String]
-                     , hvararg :: Maybe String
+             | HFunc { hparams :: [Var]
+                     , hvararg :: Maybe Var
                      , hbody :: (Env -> LispVal -> Maybe [LispVal] -> IOThrowsError LispVal)
                      , hclosure :: Env }
              | Port Handle
