@@ -80,6 +80,7 @@ data LispVal = Atom String
              | Bool Bool
              | PrimitiveFunc String ([LispVal] -> ThrowsError LispVal)
              | IOFunc String ([LispVal] -> IOThrowsError LispVal)
+             | EvalFunc String ([LispVal] -> EvalM LispVal)
              | Func { params :: [Var]
                     , vararg :: Maybe Var
                     , body :: [LispVal]
@@ -115,7 +116,8 @@ showVal (DottedList hd tl) = "(" ++ unwordsList hd ++ " . " ++ showVal tl ++ ")"
 showVal (Vector arr) = "$(" ++ unwordsList (elems arr) ++ ")"
 showVal (Hash hash) = "#(" ++ unwordsList (unpairs $ zip (Map.keys hash) (Map.elems hash)) ++ ")"
 showVal (PrimitiveFunc name _) = "<primitive:" ++ name ++ ">"
-showVal (IOFunc name _) = "<ioPrimitive:" ++ name ++ ">"
+showVal (IOFunc name _) = "<primitive:" ++ name ++ ">"
+showVal (EvalFunc name _) = "<primitive:" ++ name ++ ">"
 showVal (HFunc _ _ _ _) = "<haskellFunction>"
 showVal (Func { params = args, vararg = varargs }) = showFunc "fn" args varargs
 showVal (Port _) = "<IO port>"
@@ -158,6 +160,7 @@ typeName (String _)          = "string"
 typeName (Bool _)            = "boolean"
 typeName (PrimitiveFunc _ _) = "procedure"
 typeName (IOFunc _ _)        = "procedure"
+typeName (EvalFunc _ _)      = "procedure"
 typeName (Func {})           = "procedure"
 typeName (Exception _)       = "exception"
 typeName (Port _)            = "port"
@@ -204,13 +207,13 @@ instance Error LispError where
     noMsg  = Default "An internal error has occured"
     strMsg = Default
 
-errNumArgs :: MonadError LispError m => Integer -> [LispVal] -> m LispVal
+errNumArgs :: MonadError LispError m => Integer -> [LispVal] -> m a
 errNumArgs num args = throwError $ NumArgs num args
 
-errTypeMismatch :: MonadError LispError m => String -> LispVal -> m LispVal
+errTypeMismatch :: MonadError LispError m => String -> LispVal -> m a
 errTypeMismatch expected found = throwError $ TypeMismatch expected found
 
-errUser :: MonadError LispError m => String -> [LispVal] -> m LispVal
+errUser :: MonadError LispError m => String -> [LispVal] -> m a
 errUser name args = throwError $ UserError name args
 
 errorName :: LispError -> String

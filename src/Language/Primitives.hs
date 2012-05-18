@@ -1,6 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
-module Language.Primitives (primitiveBindings, gensym_) where
+module Language.Primitives (primitiveBindings, gensym_, load) where
 
 import System.IO
 import System.Directory
@@ -22,15 +22,61 @@ import Language.Variables
 -- Initial environment
 
 primitiveBindings :: IO Env
-primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc IOFunc) ioPrimitives
-                                              ++ map (makeFunc PrimitiveFunc) primitives)
+primitiveBindings = nullEnv >>= (extendEnv $ map (makeFunc EvalFunc) evalPrimitives
+                                          ++ map (makeFunc IOFunc) ioPrimitives
+                                          ++ map (makeFunc PrimitiveFunc) primitives)
     where makeFunc constructor (var, func) = (var, constructor var func)
 
--- Primitives that execute within the IO monad
+-- Primitives that execute within the EvalM monad (can access the environment)
+
+evalPrimitives :: [(String, [LispVal] -> EvalM LispVal)]
+evalPrimitives = [ ("apply", applyProc)
+                 , ("eval", unaryEvalFunc mevalM)
+                 , ("expand", unaryEvalFunc expandMAll)
+                 , ("expand1", unaryEvalFunc expandMOne)
+                 , ("load", unaryEvalFunc loadProc)
+                 , ("dump-env", unaryEvalFunc dumpEnv)
+                 , ("bind", bindProc)
+                 , ("unbind", unaryEvalFunc unbindProc)
+                 , ("hash-update", hashUpdate) ]
+
+unaryEvalFunc :: (LispVal -> EvalM LispVal) -> [LispVal] -> EvalM LispVal
+unaryEvalFunc func [expr]  = func expr
+unaryEvalFunc func badArgs = lift $ errNumArgs 1 badArgs
+
+applyProc :: [LispVal] -> EvalM LispVal
+applyProc [func, List args] = mapply func args
+applyProc (func : args)     = mapply func args
+
+loadProc :: LispVal -> EvalM LispVal
+loadProc (String filename) = (lift $ load filename) >>= liftM last . mapM mevalM
+loadProc other             = lift $ errTypeMismatch "string" other
+
+dumpEnv :: LispVal -> EvalM LispVal
+dumpEnv (String name) = do
+    local <- getBindings >>= readRef
+    let namespace = filter (\((n,_),_) -> n == name) (Map.toList local)
+    forM_ namespace printVar
+    return $ List []
+    where
+        printVar ((_,var),valRef) = do
+            val <- readRef valRef
+            liftIO $ putStrLn (var ++ " : " ++ show val)
+dumpEnv notString = lift $ errTypeMismatch "string" notString
+
+bindProc :: [LispVal] -> EvalM LispVal
+bindProc [Atom var, val] = bindM (var, val) >> return (Atom "ok")
+bindProc [notAtom, val]  = lift $ errTypeMismatch "atom" notAtom
+bindProc badArgs         = lift $ errNumArgs 2 badArgs
+
+unbindProc :: LispVal -> EvalM LispVal
+unbindProc (Atom var) = unbindM var >> return (Atom "ok")
+unbindProc notAtom    = lift $ errTypeMismatch "atom" notAtom
+
+-- Primitives that execute within the IOThrowsError monad (can perform I/O)
 
 ioPrimitives :: [(String, [LispVal] -> IOThrowsError LispVal)]
-ioPrimitives = --[ ("apply", applyProc)
-               -- Read/write
+ioPrimitives = -- Read/write
                [ ("write", writeProc)
                , ("read", readProc)
                -- Console output
@@ -45,19 +91,14 @@ ioPrimitives = --[ ("apply", applyProc)
                , ("read-all", readAll)
                , ("file-exists", fileExists)
                , ("delete-file", deleteFile)
-               -- Hash functions
-               --, ("hash-update", hashUpdate)
-               -- Random numbers and unique symbols
+               -- Random number generation
                , ("random", rand)
+               -- Generate unique symbols
                , ("uniq", gensym) ]
-
---applyProc :: [LispVal] -> IOThrowsError LispVal
---applyProc [func, List args] = apply func args
---applyProc (func : args)     = apply func args
 
 makePort :: IOMode -> [LispVal] -> IOThrowsError LispVal
 makePort mode [String filename] = asIO Port $ openFile filename mode
-makePort mode args = throwError $ NumArgs 1 args
+makePort mode args = errNumArgs 1 args
 
 closePort :: [LispVal] -> IOThrowsError LispVal
 closePort [Port port] = liftIO $ hClose port >> (return $ Bool True)
@@ -66,14 +107,14 @@ closePort _           = return $ Bool False
 readProc :: [LispVal] -> IOThrowsError LispVal
 readProc []          = readProc [Port stdin]
 readProc [Port port] = (liftIO $ hGetLine port) >>= liftThrows . readExpr
-readProc [notPort]   = throwError $ TypeMismatch "port" notPort
-readProc badArgs = throwError $ NumArgs 1 badArgs
+readProc [notPort]   = errTypeMismatch "port" notPort
+readProc badArgs = errNumArgs 1 badArgs
 
 writeProc :: [LispVal] -> IOThrowsError LispVal
 writeProc [obj]            = writeProc [obj, Port stdout]
 writeProc [obj, Port port] = liftIO $ hPrint port obj >> return nil
-writeProc [obj, notPort]   = throwError $ TypeMismatch "port" notPort
-writeProb badArgs = throwError $ NumArgs 1 badArgs
+writeProc [obj, notPort]   = errTypeMismatch "port" notPort
+writeProb badArgs = errNumArgs 1 badArgs
 
 printProc :: (String -> IO ()) -> [LispVal] -> IOThrowsError LispVal
 printProc printer []     = liftIO $ printer "" >> return nil
@@ -84,8 +125,8 @@ printProc printer (x:xs) = liftIO (putStr $ pr x) >> printProc printer xs
 
 fileExists :: [LispVal] -> IOThrowsError LispVal
 fileExists [String filename] = liftIO (doesFileExist filename) >>= return . Bool
-fileExists [notString]       = throwError $ TypeMismatch "string" notString
-fileExists badArgs           = throwError $ NumArgs 1 badArgs
+fileExists [notString]       = errTypeMismatch "string" notString
+fileExists badArgs           = errNumArgs 1 badArgs
 
 deleteFile :: [LispVal] -> IOThrowsError LispVal
 deleteFile [String filename] = do
@@ -95,47 +136,45 @@ deleteFile [String filename] = do
             liftIO $ removeFile filename
             return $ Bool True
         else return $ Bool False
-deleteFile [notString] = throwError $ TypeMismatch "string" notString
-deleteFile badArgs     = throwError $ NumArgs 1 badArgs
+deleteFile [notString] = errTypeMismatch "string" notString
+deleteFile badArgs     = errNumArgs 1 badArgs
 
 readContents :: [LispVal] -> IOThrowsError LispVal
 readContents [String filename] = asIO String $ readFile filename
-readContents [notString]       = throwError $ TypeMismatch "string" notString
-readContents badArgs           = throwError $ NumArgs 1 badArgs
+readContents [notString]       = errTypeMismatch "string" notString
+readContents badArgs           = errNumArgs 1 badArgs
 
 readAll :: [LispVal] -> IOThrowsError LispVal
 readAll [String filename] = liftM List $ load filename
-readAll [notString]       = throwError $ TypeMismatch "string" notString
-readAll badArgs           = throwError $ NumArgs 1 badArgs
-
--- Unique symbols
+readAll [notString]       = errTypeMismatch "string" notString
+readAll badArgs           = errNumArgs 1 badArgs
 
 gensym :: [LispVal] -> IOThrowsError LispVal
 gensym []              = gensym_ "#g"
 gensym [String prefix] = gensym_ prefix
-gensym [notString]     = throwError $ TypeMismatch "string" notString
-gensym badArgs         = throwError $ NumArgs 1 badArgs
-
--- Random numbers
+gensym [notString]     = errTypeMismatch "string" notString
+gensym badArgs         = errNumArgs 1 badArgs
 
 rand :: [LispVal] -> IOThrowsError LispVal
 rand [modulus] = case modulus of
     Number n -> asIO Number $ randomRIO (0, n - 1)
     Float n  -> asIO Float $ randomRIO (0, n)
     Ratio n  -> asIO (Ratio . toRational) $ randomRIO (0 , fromRational n :: Double)
-rand badArgs = throwError $ NumArgs 1 badArgs
+rand badArgs = errNumArgs 1 badArgs
 
--- Core primitives
+-- Primitives that execute within the ThrowsError monad
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
-primitives = numericPrimitives ++ 
-             [ ("type", typeOf)
+primitives = -- Numeric functions
+             numericPrimitives ++ 
+             -- Type querying
+             [ ("type", unaryOp typeOf)
              -- String comparisons
-             , ("str==", strBoolBinop (==))
-             , ("str<", strBoolBinop (<))
-             , ("str>", strBoolBinop (>))
-             , ("str<=", strBoolBinop (<=))
-             , ("str>=", strBoolBinop (>=))
+             --, ("str==", strBoolBinop (==))
+             --, ("str<", strBoolBinop (<))
+             --, ("str>", strBoolBinop (>))
+             --, ("str<=", strBoolBinop (<=))
+             --, ("str>=", strBoolBinop (>=))
              -- Vectors
              , ("vector", vector)
              -- Hashes
@@ -160,208 +199,84 @@ primitives = numericPrimitives ++
              , ("cons", cons)
              -- Exception-handling
              , ("new-exception", newException)
-             , ("exception-type", exceptionType)
-             , ("exception-args", exceptionArgs)
-             , ("raise", raiseException)
+             , ("exception-type", unaryOp exceptionType)
+             , ("exception-args", unaryOp exceptionArgs)
+             , ("raise", unaryOp raiseException)
              -- Comparison operators
-             , ("is", is)
-             , ("iso", iso) ]
+             , ("is", is) ]
+             --, ("iso", iso) ]
 
-typeOf :: [LispVal] -> ThrowsError LispVal
-typeOf xs = case xs of
-    [ ] -> throwError $ NumArgs 1 xs
-    [x] -> return $ Atom $ typeName x
-    xs  -> return $ List $ map (Atom . typeName) xs
+unaryOp :: (LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
+unaryOp op [x]   = op x
+unaryOp op other = errNumArgs 1 other
+
+typeOf :: LispVal -> ThrowsError LispVal
+typeOf x = return $ Atom $ typeName x
+
+-- Exceptions
 
 newException :: [LispVal] -> ThrowsError LispVal
 newException (Atom name : args) = return $ Exception $ UserError name args
 newException args               = return $ Exception $ UserError "error" args
 
-exceptionType :: [LispVal] -> ThrowsError LispVal
-exceptionType [Exception e]  = return $ Atom $ errorName e
-exceptionType [notException] = throwError $ TypeMismatch "exception" notException
-exceptionType badArgs  = throwError $ NumArgs 1 badArgs
+exceptionType :: LispVal -> ThrowsError LispVal
+exceptionType (Exception e) = return $ Atom $ errorName e
+exceptionType notException  = errTypeMismatch "exception" notException
 
-exceptionArgs :: [LispVal] -> ThrowsError LispVal
-exceptionArgs [Exception (UserError _ args)] = return $ List args
-exceptionArgs [Exception e]                  = return $ List [String $ showError e]
-exceptionArgs [notException]                 = throwError $ TypeMismatch "exception" notException
-exceptionArgs badArgs                        = throwError $ NumArgs 1 badArgs
+exceptionArgs :: LispVal -> ThrowsError LispVal
+exceptionArgs (Exception (UserError _ args)) = return $ List args
+exceptionArgs (Exception e)                  = return $ List [String $ showError e]
+exceptionArgs notException                   = errTypeMismatch "exception" notException
 
-raiseException :: [LispVal] -> ThrowsError LispVal
-raiseException [Exception err] = throwError err
-raiseException [notException]  = throwError $ TypeMismatch "exception" notException
-raiseException  badArgs        = throwError $ NumArgs 1 badArgs
+raiseException :: LispVal -> ThrowsError LispVal
+raiseException (Exception err) = throwError err
+raiseException notException    = errTypeMismatch "exception" notException
 
-unaryOp :: (LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
-unaryOp op [x]   = op x
-unaryOp op other = throwError $ NumArgs 1 other
-
-boolBinop :: (LispVal -> ThrowsError a) -> (a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
-boolBinop unpacker op args = if length args /= 2
-    then throwError $ NumArgs 2 args
-    else do left <- unpacker $ args !! 0
-            right <- unpacker $ args !! 1
-            return $ Bool $ left `op` right
-
-numBoolBinop  = boolBinop unpackNum
-strBoolBinop  = boolBinop unpackStr
-boolBoolBinop = boolBinop unpackBool
-
-unpackStr :: LispVal -> ThrowsError String
-unpackStr (String s) = return s
-unpackStr (Number s) = return $ show s
-unpackStr (Bool s)   = return $ show s
-unpackStr (Char s)   = return $ show s
-unpackStr notString  = throwError $ TypeMismatch "string" notString
-
-unpackBool :: LispVal -> ThrowsError Bool
-unpackBool (Bool b) = return b
-unpackBool notBool  = throwError $ TypeMismatch "boolean" notBool
-
-unpackNum :: LispVal -> ThrowsError Integer
-unpackNum (Number n)    = return n
-unpackNum (Ratio n)     = if denominator n == 1
-                            then return $ numerator n
-                            else throwError $ TypeMismatch "number" $ Ratio n
-unpackNum (Float n)     = if isIntegral n
-                            then return $ round n
-                            else throwError $ TypeMismatch "number" $ Float n
-unpackNum (Complex n)   = if imagPart n == 0 && isIntegral (realPart n)
-                            then return $ round (realPart n)
-                            else throwError $ TypeMismatch "number" $ Complex n
-unpackNum (String n)    = let parsed = reads n in
-                            if null parsed
-                                then throwError $ TypeMismatch "number" $ String n
-                                else return $ fst $ parsed !! 0
-unpackNum (List [n])    = unpackNum n
-unpackNum notNum        = throwError $ TypeMismatch "number" notNum
-
-isIntegral :: Double -> Bool
-isIntegral x = fracPart == 0 where fracPart = x - fromIntegral (round x)
-
-unpackRat :: LispVal -> ThrowsError Rational
-unpackRat (Number n)  = return $ fromIntegral n
-unpackRat (Ratio n)   = return n
-unpackRat (Float n)   = return $ toRational n
-unpackRat (Complex n) = if imagPart n == 0
-                            then return $ toRational (realPart n)
-                            else throwError $ TypeMismatch "ratio" $ Complex n
-unpackRat (List [n])  = unpackRat n
-unpackRat notRat      = throwError $ TypeMismatch "ratio" notRat
-
-unpackFloat :: LispVal -> ThrowsError Double
-unpackFloat (Number n)  = return $ fromIntegral n
-unpackFloat (Ratio n)   = return $ fromRational n
-unpackFloat (Float n)   = return n
-unpackFloat (Complex n) = if imagPart n == 0
-                            then return (realPart n)
-                            else throwError $ TypeMismatch "float" $ Complex n
-unpackFloat (String n)  = let parsed = reads n in
-                            if null parsed
-                                then throwError $ TypeMismatch "number" $ String n
-                                else return $ fst $ parsed !! 0
-unpackFloat (List [n])  = unpackFloat n
-unpackFloat notFloat    = throwError $ TypeMismatch "float" notFloat
-
-unpackCplx :: LispVal -> ThrowsError (Complex Double)
-unpackCplx (Number n)   = return $ fromIntegral n
-unpackCplx (Ratio n)    = return $ fromRational n
-unpackCplx (Float n)    = return $ n :+ 0
-unpackCplx (Complex n)  = return n
-unpackCplx (List [n])   = unpackCplx n
-unpackCplx notComplex   = throwError $ TypeMismatch "complex" notComplex
-
-unaryBoolOp :: (LispVal -> Bool) -> [LispVal] -> ThrowsError LispVal
-unaryBoolOp p [x] = return $ Bool (p x)
-unaryBoolOp p xs  = throwError $ NumArgs 1 xs
-
-isSymbol :: LispVal -> Bool
-isSymbol (Atom _) = True
-isSymbol _        = False
-
-isPair :: LispVal -> Bool
-isPair (List (x:_))          = True
-isPair (DottedList (x:_) tl) = True
-isPair _                     = False
-
-isBool :: LispVal -> Bool
-isBool (Bool _) = True
-isBool _        = False
-
-isChar :: LispVal -> Bool
-isChar (Char _) = True
-isChar _        = False
-
-isString :: LispVal -> Bool
-isString (String _) = True
-isString _          = False
-
-isNumber :: LispVal -> Bool
-isNumber (Number _)  = True
-isNumber (Ratio _)   = True
-isNumber (Float _)   = True
-isNumber (Complex _) = True
-isNumber _           = False
-
-isVector :: LispVal -> Bool
-isVector (Vector _) = True
-isVector _          = False
-
-isHash :: LispVal -> Bool
-isHash (Hash _) = True
-isHash _        = False
-
-isProcedure :: LispVal -> Bool
-isProcedure (PrimitiveFunc _ _) = True
-isProcedure (IOFunc _ _)        = True
-isProcedure (Func _ _ _ _)      = True
-isProcedure _                   = False
-
-isPort :: LispVal -> Bool
-isPort (Port _) = True
-isPort _        = False
+-- Type coercion
 
 typeTrans :: (LispVal -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
 typeTrans f [x]  = f x
-typeTrans f args = throwError $ NumArgs 1 args
+typeTrans f args = errNumArgs 1 args
 
 listToString :: LispVal -> ThrowsError LispVal
 listToString (List xs) = liftM String $ stringify xs where
     stringify []              = return ""
     stringify (Char c : rest) = liftM (c:) $ stringify rest
-    stringify (other : rest)  = throwError $ TypeMismatch "char" other
-listToString notList   = throwError $ TypeMismatch "list" notList
+    stringify (other : rest)  = errTypeMismatch "char" other
+listToString notList   = errTypeMismatch "list" notList
 
 stringToList :: LispVal -> ThrowsError LispVal
 stringToList (String cs) = return $ List (map Char cs)
-stringToList notString   = throwError $ TypeMismatch "string" notString
+stringToList notString   = errTypeMismatch "string" notString
 
 symbolToString :: LispVal -> ThrowsError LispVal
 symbolToString (Atom val) = return $ String val
-symbolToString notAtom    = throwError $ TypeMismatch "symbol" notAtom
+symbolToString notAtom    = errTypeMismatch "symbol" notAtom
 
 stringToSymbol :: LispVal -> ThrowsError LispVal
 stringToSymbol (String val) = return $ Atom val
-stringToSymbol notString    = throwError $ TypeMismatch "string" notString
+stringToSymbol notString    = errTypeMismatch "string" notString
 
 vectorToList :: LispVal -> ThrowsError LispVal
 vectorToList (Vector arr) = return $ List (elems arr)
-vectorToList notVector    = throwError $ TypeMismatch "vector" notVector
+vectorToList notVector    = errTypeMismatch "vector" notVector
 
 listToVector :: LispVal -> ThrowsError LispVal
 listToVector (List xs) = return $ Vector $ listArray (0, length xs - 1) xs
-listToVector notList   = throwError $ TypeMismatch "list" notList
+listToVector notList   = errTypeMismatch "list" notList
 
 -- Hash functions
 
+hash :: [LispVal] -> ThrowsError LispVal
+hash xs = return $ Hash $ Map.fromList $ pairs xs
+
 keys :: LispVal -> ThrowsError LispVal
 keys (Hash hash) = return . List $ Map.keys hash
-keys notHash     = throwError $ TypeMismatch "hash" notHash
+keys notHash     = errTypeMismatch "hash" notHash
 
 vals :: LispVal -> ThrowsError LispVal
 vals (Hash hash) = return . List $ Map.elems hash
-vals notHash     = throwError $ TypeMismatch "hash" notHash
+vals notHash     = errTypeMismatch "hash" notHash
 
 hashInsert :: [LispVal] -> ThrowsError LispVal
 hashInsert [key, val, Hash hash] = return $ Hash $ Map.insert key val hash
@@ -380,38 +295,47 @@ hashElem [key, Hash hash] = return $ Bool $ Map.member key hash
 hashElem [key, notHash]   = errTypeMismatch "hash" notHash
 hashElem badArgs          = errNumArgs 2 badArgs
 
---hashUpdate :: [LispVal] -> IOThrowsError LispVal
---hashUpdate [key, func, Hash hash] = if Map.member key hash
---    then case typeName func of
---        "procedure"  -> do
---            let oldValue = hash Map.! key
---            newValue <- apply func [oldValue]
---            return $ Hash $ Map.insert key newValue hash
---        notProcedure -> errTypeMismatch "procedure" func
---    else throwError $ KeyNotFound key (Hash hash)
---hashUpdate [key, func, notHash]   = errTypeMismatch "hash" notHash
---hashUpdate badArgs                = errNumArgs 3 badArgs 
+hashUpdate :: [LispVal] -> EvalM LispVal
+hashUpdate [key, func, Hash hash] = if Map.member key hash
+    then case typeName func of
+        "procedure"  -> do
+            let oldValue = hash Map.! key
+            newValue <- mapply func [oldValue]
+            return $ Hash $ Map.insert key newValue hash
+        notProcedure -> errTypeMismatch "procedure" func
+    else throwError $ KeyNotFound key (Hash hash)
+hashUpdate [key, func, notHash]   = errTypeMismatch "hash" notHash
+hashUpdate badArgs                = errNumArgs 3 badArgs 
 
--- Primitives
+-- Vector functions
+
+vector :: [LispVal] -> ThrowsError LispVal
+vector xs = return $ Vector $ listArray (0, length xs - 1) xs
+
+-- Lisp primitives
 
 car :: [LispVal] -> ThrowsError LispVal
 car [List (x:_)]          = return x
 car [DottedList (x:_) _]  = return x
 car [String (x:_)]        = return (Char x)
-car [Vector arr]          = return (arr ! 0)
-car [notList]             = throwError $ TypeMismatch "list" notList
-car badArgs               = throwError $ NumArgs 2 badArgs
+car [Vector arr]          = case snd (bounds arr) of
+                                (-1) -> errTypeMismatch "pair" (Vector arr)
+                                _    -> return (arr ! 0)
+car [notPair]             = errTypeMismatch "pair" notPair
+car badArgs               = errNumArgs 2 badArgs
 
 cdr :: [LispVal] -> ThrowsError LispVal
 cdr [List (x:xs)]           = return $ List xs
 cdr [DottedList [_] x]      = return x
 cdr [DottedList (_ : xs) x] = return $ DottedList xs x
 cdr [String (x:xs)]         = return $ String xs
-cdr [Vector arr]            = return $ Vector $ listArray (0, n-1) (drop 1 els) where
-                                (_, n) = bounds arr
-                                els    = elems arr
-cdr [notList]               = throwError $ TypeMismatch "pair" notList
-cdr badArgs                 = throwError $ NumArgs 1 badArgs
+cdr [Vector arr]            = case n of
+                                (-1) -> errTypeMismatch "pair" (Vector arr)
+                                _    -> return $ Vector $ listArray (0, n-1) (drop 1 els)
+                              where (_, n) = bounds arr
+                                    els    = elems arr
+cdr [notPair]               = errTypeMismatch "pair" notPair
+cdr badArgs                 = errNumArgs 1 badArgs
 
 cons :: [LispVal] -> ThrowsError LispVal
 cons [Char c, List []]     = return $ String [c]
@@ -423,25 +347,23 @@ cons [x, Vector arr]       = return $ Vector $ listArray (0, n+1) (x:els) where
                                 (_, n) = bounds arr
                                 els    = elems arr
 cons [x, y]                = return $ DottedList [x] y
-cons badArgs               = throwError $ NumArgs 2 badArgs
+cons badArgs               = errNumArgs 2 badArgs
 
-vector :: [LispVal] -> ThrowsError LispVal
-vector xs = return $ Vector $ listArray (0, length xs - 1) xs
-
-hash :: [LispVal] -> ThrowsError LispVal
-hash xs = return $ Hash $ Map.fromList $ pairs xs
+-- Polymorphic length
 
 len :: [LispVal] -> ThrowsError LispVal
 len [arg]   = len' arg >>= return . Number . fromIntegral
-len badArgs = throwError $ NumArgs 1 badArgs
+len badArgs = errNumArgs 1 badArgs
 
 len' :: LispVal -> ThrowsError Int
 len' (List xs)          = return $ length xs
-len' (DottedList xs tl) = return $ 1 + length xs
+len' (DottedList xs _)  = return $ 1 + length xs
 len' (Vector arr)       = let (_, n) = bounds arr in return (n + 1)
 len' (Hash hash)        = return $ length $ Map.keys hash
 len' (String str)       = return $ length str
-len' other = throwError $ TypeMismatch "pair, vector, hash or string" other
+len' other = errTypeMismatch "pair, vector, hash or string" other
+
+-- Equality testing
 
 listEquals :: ([LispVal] -> ThrowsError LispVal) -> [LispVal] -> [LispVal] -> ThrowsError LispVal
 listEquals eq arg1 arg2 = return $ Bool $ (length arg1 == length arg2) &&
@@ -464,36 +386,21 @@ is [Vector xs, Vector ys]             = listEquals is (elems xs) (elems ys)
 is [List xs, List ys]                 = listEquals is xs ys
 is [Hash xs, Hash ys]                 = return $ Bool $ xs == ys
 is [_ , _] = return $ Bool False
-is badArgs = throwError $ NumArgs 2 badArgs
-
-iso :: [LispVal] -> ThrowsError LispVal
-iso [DottedList xs x, DottedList ys y] = listEquals iso (xs++[x]) (ys++[y])
-iso [Vector xs, Vector ys]             = listEquals iso (elems xs) (elems ys)
-iso [List xs, List ys]                 = listEquals iso xs ys
-iso [arg1, arg2] = do
-    primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2)
-                       [AnyUnpacker unpackNum, AnyUnpacker unpackRat,
-                        AnyUnpacker unpackFloat, AnyUnpacker unpackCplx,
-                        AnyUnpacker unpackStr, AnyUnpacker unpackBool]
-    eqvEquals <- is [arg1, arg2]
-    return $ Bool $ (primitiveEquals || let (Bool x) = eqvEquals in x)
-iso badArgs = throwError $ NumArgs 2 badArgs
+is badArgs = errNumArgs 2 badArgs
 
 -- Helper functions
-
-data Unpacker = forall a. Eq a => AnyUnpacker (LispVal -> ThrowsError a)
-
-unpackEquals :: LispVal -> LispVal -> Unpacker -> ThrowsError Bool
-unpackEquals arg1 arg2 (AnyUnpacker unpacker) = do
-        unpacked1 <- unpacker arg1
-        unpacked2 <- unpacker arg2
-        return $ unpacked1 == unpacked2
-    `catchError` (const $ return False)
 
 gensym_ :: String -> IOThrowsError LispVal
 gensym_ prefix = do
     u <- liftIO $ newUnique
     return $ Atom $ prefix ++ (show $ toInteger $ hashUnique u)
+
+load :: String -> IOThrowsError [LispVal]
+load filename = do
+    result <- liftIO $ doesFileExist filename
+    if result
+      then (liftIO $ readFile filename) >>= liftThrows . readExprList
+      else throwError $ FileNotFound filename
 
 {- liftIO :: MonadIO m => IO a -> m a
         Lifts IO values into an IO-compatible monad

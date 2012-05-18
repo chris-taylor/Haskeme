@@ -1,8 +1,12 @@
-module Language.Variables where
+module Language.Variables (
+    defineVar, defineMacro, getVar, setVar,
+    readRef,
+    macRecLookup,
+    bindM, unbindM,
+    extendEnv,
+    setCar, setCdr, setIndex) where
 
 import Control.Monad.Error
---import qualified Control.Monad.Reader as R
---import qualified Control.Monad.State as S
 
 import Data.IORef
 import Data.Array
@@ -11,7 +15,7 @@ import qualified Data.Map as Map
 
 import Language.Types
 
--- Functions that work within the EvalM monad
+-- Lifting of IO operations to work within the EvalM monad
 
 newRef :: a -> EvalM (IORef a)
 newRef = lift . lift . newIORef
@@ -36,7 +40,8 @@ popFromStack = getStack >>= \stackref -> do
         else do modifyRef tail stackref
                 return $ Just $ head stackval
 
--- Functions to manipulate environments (bind/unbind variables etc)
+-- Functions to manipulate environments using a stack to store shadowed
+-- values - this is highly experimental!
 
 pushIfBound :: Var -> EvalM ()
 pushIfBound var = do
@@ -132,42 +137,44 @@ recLookup ns var env = do
 varRecLookup = recLookup varNamespace
 macRecLookup = recLookup macNamespace
 
-get :: Namespace -> Env -> Var -> IOThrowsError LispVal
-get namespace env var = do
-    binds <- liftIO $ readIORef (bindings env)
+get :: Namespace -> Var -> EvalM LispVal
+get namespace var = do
+    env <- getEnv
+    binds <- readRef (bindings env)
     maybe (case parent env of
             Nothing  -> throwError $ UnboundVar "Getting an unbound variable" var
-            Just prt -> get namespace prt var)
+            Just prt -> inEnv prt $ get namespace var)
           (liftIO . readIORef)
           (envLookup namespace var binds)
 
 getVar = get varNamespace
 getMacro = get macNamespace
 
-set :: Namespace -> Env -> String -> LispVal -> IOThrowsError LispVal
-set namespace env var val = do
-    binds <- liftIO $ readIORef (bindings env)
+set :: Namespace -> String -> LispVal -> EvalM LispVal
+set namespace var val = do
+    env <- getEnv
+    loc <- readRef (bindings env)
     maybe (case parent env of
             Nothing  -> throwError $ UnboundVar "Setting an unbound variable" var
-            Just prt -> set namespace prt var val)
-          (flip writeAndReturn val)
-          (envLookup namespace var binds)
+            Just prt -> inEnv prt $ set namespace var val)
+          (lift . flip writeAndReturn val)
+          (envLookup namespace var loc)
     return val
 
 setVar = set varNamespace
 setMacro = set macNamespace
 
-define :: Namespace -> Env -> String -> LispVal -> IOThrowsError LispVal
-define namespace env var value = do
+define :: Namespace -> String -> LispVal -> EvalM LispVal
+define namespace var value = do
+    env <- getEnv
     definedLocally <- liftIO $ isBound namespace var env
     if definedLocally
-        then do
-            liftIO $ putStrLn $ "*** redefining " ++ var
-            set namespace env var value
-        else liftIO $ do
-            valueRef <- newIORef value
-            binds    <- readIORef (bindings env)
-            writeIORef (bindings env) $ envInsert namespace var valueRef binds
+        then do liftIO $ putStrLn $ "*** redefining " ++ var
+                set namespace var value
+        else do
+            valueRef <- newRef value
+            binds    <- readRef (bindings env)
+            writeRef (bindings env) $ envInsert namespace var valueRef binds
             return value
 
 defineVar = define varNamespace
@@ -190,19 +197,22 @@ writeAndReturn varRef val = do
     liftIO $ writeIORef varRef val
     return val
 
-setCar :: Env -> String -> LispVal -> IOThrowsError LispVal
-setCar env var val = do
-    local <- liftIO $ readIORef (bindings env)
-    maybe (throwError $ UnboundVar "Setting car of an unbound variable" var)
+setCar :: String -> LispVal -> EvalM LispVal
+setCar var val = do
+    env <- getEnv
+    loc <- getBindings >>= readRef
+    maybe (case parent env of
+            Nothing  -> throwError $ UnboundVar "Setting car of an unbound variable" var
+            Just prt -> inEnv prt $ setCar var val)
           (\varRef -> do
-            oldVal <- liftIO $ readIORef varRef
+            oldVal <- readRef varRef
             case oldVal of
-                List (_ : cdr)          -> setListCar varRef val cdr
-                DottedList (_ : cdr) tl -> setDottedListCar varRef val cdr tl
-                Vector arr              -> setVectorCar varRef val arr
-                String (_ : cdr)        -> setStringCar varRef val cdr
-                other    -> throwError $ TypeMismatch "pair, vector or string" other)
-          (varLookup var local)
+                List (_ : cdr)          -> lift $ setListCar varRef val cdr
+                DottedList (_ : cdr) tl -> lift $ setDottedListCar varRef val cdr tl
+                Vector arr              -> lift $ setVectorCar varRef val arr
+                String (_ : cdr)        -> lift $ setStringCar varRef val cdr
+                other    -> errTypeMismatch "pair, vector or string" other)
+          (varLookup var loc)
 
 setListCar :: IORef LispVal -> LispVal -> [LispVal] -> IOThrowsError LispVal
 setListCar varRef val cdr = writeAndReturn varRef $ List (val : cdr)
@@ -221,19 +231,22 @@ setStringCar varRef val cdr = writeAndReturn varRef $ case val of
     Char c -> String (c : cdr)
     _      -> List (val : map Char cdr)
 
-setCdr :: Env -> String -> LispVal -> IOThrowsError LispVal
-setCdr env var val = do
-    local <- liftIO $ readIORef (bindings env)
-    maybe (throwError $ UnboundVar "Setting cdr of an unbound variable" var)
+setCdr :: String -> LispVal -> EvalM LispVal
+setCdr var val = do
+    env <- getEnv
+    loc <- getBindings >>= readRef
+    maybe (case parent env of
+            Nothing  -> throwError $ UnboundVar "Setting cdr of an unbound variable" var
+            Just prt -> inEnv prt $ setCdr var val)
           (\varRef -> do
             oldVal <- liftIO $ readIORef varRef
             case oldVal of
-                List (car : _)          -> setListCdr varRef car val
-                DottedList (car : _) _  -> setListCdr varRef car val
-                Vector arr              -> setVectorCdr varRef car val where car = arr ! 0
-                String (car : _)        -> setStringCdr varRef car val
-                notPair -> throwError $ TypeMismatch "pair, vector or string" notPair)
-          (varLookup var local)
+                List (car : _)          -> lift $ setListCdr varRef car val
+                DottedList (car : _) _  -> lift $ setListCdr varRef car val
+                Vector arr              -> lift $ setVectorCdr varRef car val where car = arr ! 0
+                String (car : _)        -> lift $ setStringCdr varRef car val
+                notPair -> errTypeMismatch "pair, vector or string" notPair)
+          (varLookup var loc)
 
 setListCdr :: IORef LispVal -> LispVal -> LispVal -> IOThrowsError LispVal
 setListCdr varRef car val = writeAndReturn varRef (case val of
@@ -257,25 +270,28 @@ setStringCdr varRef car val = writeAndReturn varRef (case val of
     DottedList xs tl -> DottedList (Char car : xs) tl
     _                -> DottedList [Char car] val)
 
-setIndex :: Env -> String -> LispVal -> LispVal -> IOThrowsError LispVal
-setIndex env var index val = do
-    local <- liftIO $ readIORef (bindings env)
-    maybe (throwError $ UnboundVar "Setting index of an unbound variable" var)
+setIndex :: String -> LispVal -> LispVal -> EvalM LispVal
+setIndex var index val = do
+    env <- getEnv
+    loc <- getBindings >>= readRef
+    maybe (case parent env of
+            Nothing  -> throwError $ UnboundVar "Setting index of an unbound variable" var
+            Just prt -> inEnv prt $ setIndex var index val)
           (\varRef -> do
             oldVal <- liftIO $ readIORef varRef
             case oldVal of
-                String str -> setStringIndex varRef str index val
-                Vector arr -> setVectorIndex varRef arr index val
-                Hash hash  -> setHashKey varRef hash index val
-                other -> throwError $ TypeMismatch "string, vector or hash" other)
-          (varLookup var local)
+                String str -> lift $ setStringIndex varRef str index val
+                Vector arr -> lift $ setVectorIndex varRef arr index val
+                Hash hash  -> lift $ setHashKey varRef hash index val
+                other -> errTypeMismatch "string, vector or hash" other)
+          (varLookup var loc)
 
 setStringIndex :: IORef LispVal -> String -> LispVal -> LispVal -> IOThrowsError LispVal
 setStringIndex varRef str index val = case index of
     Number n -> case val of
         Char c  -> writeAndReturn varRef (String $ replaceAt n str c)
-        notChar -> throwError $ TypeMismatch "char" notChar
-    notInt   -> throwError $ TypeMismatch "integer" notInt
+        notChar -> errTypeMismatch "char" notChar
+    notInt   -> errTypeMismatch "integer" notInt
 
 replaceAt :: Integer -> [a] -> a -> [a]
 replaceAt n lst val = xs ++ val:ys where
@@ -284,21 +300,7 @@ replaceAt n lst val = xs ++ val:ys where
 setVectorIndex :: IORef LispVal -> VectorType -> LispVal -> LispVal -> IOThrowsError LispVal
 setVectorIndex varRef arr index val = case index of
     Number n -> writeAndReturn varRef (Vector $ arr // [(fromInteger n, val)])
-    notInt   -> throwError $ TypeMismatch "integer" notInt
+    notInt   -> errTypeMismatch "integer" notInt
 
 setHashKey :: IORef LispVal -> HashType -> LispVal -> LispVal -> IOThrowsError LispVal
 setHashKey varRef hash key val = writeAndReturn varRef (Hash $ Map.insert key val hash)
-
--- Debugging
-
-showNamespace :: Env -> LispVal -> IOThrowsError LispVal
-showNamespace env (String name) = do
-    local <- liftIO $ readIORef (bindings env)
-    let namespace = filter (\((n,_),_) -> n == name) (Map.toList local)
-    forM_ namespace printVar
-    return $ List []
-    where
-        printVar ((_,var),valRef) = do
-            val <- liftIO $ readIORef valRef
-            liftIO $ putStrLn (var ++ " : " ++ show val)
-showNamespace _ other = throwError $ TypeMismatch "string" other

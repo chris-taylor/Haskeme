@@ -142,6 +142,12 @@ numericCast cast xs  = case xs of
             NotANumber -> throwError $ TypeMismatch "number" x
             _          -> return (cast x)
 
+-- Subtraction is a special case because of unary minus
+
+numericMinus :: [LispVal] -> ThrowsError LispVal
+numericMinus [x] = numericUnOp negate [x]
+numericMinus xs  = numericBinOp (-) xs
+
 -- Type checking. Input to these functions is passed via numericBoolOp,
 -- which checks for type mismatches, so we can always assume that we have
 -- a numeric type.
@@ -184,10 +190,6 @@ foldLeft1Error :: (LispVal -> LispVal -> ThrowsError LispVal) -> [LispVal] -> Th
 foldLeft1Error op xs = if length xs == 0
     then throwError $ NumArgs 1 xs
     else foldLeftError op (tail xs) (head xs)
-
-numericMinus :: [LispVal] -> ThrowsError LispVal
-numericMinus [x] = numericUnOp negate [x]
-numericMinus xs  = numericBinOp (-) xs
 
 numericBoolOp :: (LispVal -> Bool) -> [LispVal] -> ThrowsError LispVal
 numericBoolOp p [x] = if numType x == NotANumber

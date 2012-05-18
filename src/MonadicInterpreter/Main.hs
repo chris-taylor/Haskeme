@@ -58,7 +58,7 @@ runOneM :: [String] -> IO ()
 runOneM args = do
     env <- primitiveBindings
     loadLibraries env
-    bindVars env [("args", List $ map String $ drop 1 args)]
+    extendEnv [("args", List $ map String $ drop 1 args)] env
     let thunk = mevalM (List [Atom "load", String (args !! 0)])
     let evaledExpr = run thunk env
     result <- runIOThrows $ liftM show $ evaledExpr
@@ -117,10 +117,11 @@ evalMExpr env expr = do
     let evaledExpr = parsedExpr >>= mevalM
     runIOThrows $ liftM show $ run evaledExpr env
 
-    --e <- runIOThrows $ liftM show $ run evaledExpr env
     --p <- runIOThrows $ liftM show $ run parsedExpr env
-    --putStrLn $ "Reading: " ++ p
-    --putStrLn $ "Result:  " ++ e
+    --putStrLn $ "***Reading: " ++ p
+    --e <- runIOThrows $ liftM show $ run evaledExpr env
+    --putStrLn $ "***Result:  " ++ e
+    
     --return e
 
 -- Utility functions

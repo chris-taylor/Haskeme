@@ -646,6 +646,18 @@
 (macro push (val lst)
   `(= ,lst (cons ,val ,lst)))
 
+;;;; Memoization (experimental)
+
+(def memoized (fun)
+  (let cache #()
+    (fn (n)
+      (if (~elem n cache)
+          (= (cache n) (fun n)))
+      (cache n))))
+
+(macro memoize (fun)
+  `(= ,fun (memoized ,fun)))
+
 ;;;; Tests
 
 (def test-handler
