@@ -1,5 +1,5 @@
 Name:               haskeme
-Version:            0.2
+Version:            0.3
 Synopsis:           Lisp interpreter
 Description:        A dialect of Lisp written in Haskell.
 License:            OtherLicense
@@ -34,8 +34,8 @@ Library
                         Language.HaskTypes
                         -- Language.Compiler
 
-Executable          haskm
+Executable          haski
     Build-Depends:  haskeme, base, parsec, mtl, haskell98, containers, array, random, directory
     Extensions:     ExistentialQuantification
     Main-is:        Main.hs
-    Hs-Source-Dirs: src/MonadicInterpreter
+    Hs-Source-Dirs: src/Interpreter
