@@ -31,9 +31,9 @@ primitiveBindings = nullEnv >>= (extendEnv $ map (makeFunc EvalFunc) evalPrimiti
 
 evalPrimitives :: [(String, [LispVal] -> EvalM LispVal)]
 evalPrimitives = [ ("apply", applyProc)
-                 , ("eval", unaryEvalFunc mevalM)
-                 , ("expand", unaryEvalFunc expandMAll)
-                 , ("expand1", unaryEvalFunc expandMOne)
+                 , ("eval", unaryEvalFunc meval)
+                 , ("expand", unaryEvalFunc expandAll)
+                 , ("expand1", unaryEvalFunc expandOne)
                  , ("load", unaryEvalFunc loadProc)
                  , ("dump-env", unaryEvalFunc dumpEnv)
                  , ("bind", bindProc)
@@ -45,11 +45,11 @@ unaryEvalFunc func [expr]  = func expr
 unaryEvalFunc func badArgs = lift $ errNumArgs 1 badArgs
 
 applyProc :: [LispVal] -> EvalM LispVal
-applyProc [func, List args] = mapply func args
-applyProc (func : args)     = mapply func args
+applyProc [func, List args] = apply func args
+applyProc (func : args)     = apply func args
 
 loadProc :: LispVal -> EvalM LispVal
-loadProc (String filename) = (lift $ load filename) >>= liftM last . mapM mevalM
+loadProc (String filename) = (lift $ load filename) >>= liftM last . mapM meval
 loadProc other             = lift $ errTypeMismatch "string" other
 
 dumpEnv :: LispVal -> EvalM LispVal
@@ -300,7 +300,7 @@ hashUpdate [key, func, Hash hash] = if Map.member key hash
     then case typeName func of
         "procedure"  -> do
             let oldValue = hash Map.! key
-            newValue <- mapply func [oldValue]
+            newValue <- apply func [oldValue]
             return $ Hash $ Map.insert key newValue hash
         notProcedure -> errTypeMismatch "procedure" func
     else throwError $ KeyNotFound key (Hash hash)
