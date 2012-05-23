@@ -57,7 +57,6 @@ parseExpr = try parseComplex
         <|> try parseChar
         <|> parseFunction
         <|> parseNegated
-        <|> parseAtom
         <|> parseString
         <|> parseQuote
         <|> parseQuasiquote
@@ -66,9 +65,18 @@ parseExpr = try parseComplex
         <|> parseVector
         <|> parseHash
         <|> parseList
+        <|> parseAtom
 
 parseAtom :: Parser LispVal
 parseAtom = identifier >>= return . Atom
+
+--applyOp :: Parser (LispVal -> LispVal -> LispVal)
+--applyOp = char '.' >> return (\x y -> List [x,y])
+
+parseDottedAtom :: Parser LispVal
+parseDottedAtom = do
+    chain <- (parseNumber <|> parseAtom) `sepBy1` char '.'
+    return $ foldl1 (\x y -> List [x,y]) chain
 
 parseGenAtom :: Parser LispVal
 parseGenAtom = do

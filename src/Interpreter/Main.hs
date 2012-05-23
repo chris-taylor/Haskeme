@@ -25,25 +25,25 @@ type Config = IORef ConfigImpl
 defaultConfig :: IO Config
 defaultConfig = newIORef $ ConfigImpl { prompt = defaultPrompt }
 
---showHeader :: IO ()
---showHeader = do
---    putStrLn $ " _               _"
---    putStrLn $ "| |_   ___  ___ | |__ ___  _____  ___"
---    putStrLn $ "|    \\/ _ \\/ __/| | // _ \\|     \\/ _ \\"
---    putStrLn $ "| || | |_| \\__ \\|   \\  __/| | | |  __/"
---    putStrLn $ "|_||_|\\__/\\|___/|_|\\_\\___/|_|_|_|\\___/"
---    putStrLn $ "   Author: github.com/chris-taylor"
---    putStrLn $ "  Version: " ++ showVersion version
---    putStrLn $ ""
+showHeader :: IO ()
+showHeader = do
+    putStrLn $ " _               _"
+    putStrLn $ "| |_   ___  ___ | |__ ___  _____  ___"
+    putStrLn $ "|    \\/ _ \\/ __/| | // _ \\|     \\/ _ \\"
+    putStrLn $ "| || | |_| \\__ \\|   \\  __/| | | |  __/"
+    putStrLn $ "|_||_|\\__/\\|___/|_|\\_\\___/|_|_|_|\\___/"
+    putStrLn $ "   Author: github.com/chris-taylor"
+    putStrLn $ "  Version: " ++ showVersion version
+    putStrLn $ ""
 
---showMsg :: IO ()
---showMsg = putStrLn $ "Welcome to Haskeme! Enter " ++ quitCmd ++ " to quit.\n"
+showMsg :: IO ()
+showMsg = putStrLn $ "Welcome to Haskeme. Enter :quit to quit.\n"
 
 defaultPrompt :: String
-defaultPrompt = "haskm> "
+defaultPrompt = "haski> "
 
-quitCmd :: String
-quitCmd = ":q"
+quitCmds :: [String]
+quitCmds = [":q",":quit"]
 
 -- Main
 
@@ -66,19 +66,21 @@ runOneM args = do
 
 runReplM :: IO ()
 runReplM = do
+    showHeader
     cfg <- defaultConfig
     env <- primitiveBindings
     loadLibraries env
-    replM cfg env
+    showMsg
+    replLoop cfg env
 
-replM :: Config -> Env -> IO ()
-replM cfg env = untilM_ (== quitCmd) (readPrompt cfg) (handleM cfg env)
+replLoop :: Config -> Env -> IO ()
+replLoop cfg env = untilM_ (`elem` quitCmds) (readPrompt cfg) (handle cfg env)
 
-handleM :: Config -> Env -> String -> IO ()
-handleM cfg env expr = case expr of
+handle :: Config -> Env -> String -> IO ()
+handle cfg env expr = case expr of
     ""        -> return ()
     ':' : cmd -> handleCommand cfg cmd
-    _         -> evalMPrint env expr
+    _         -> evalPrint env expr
 
 loadLibraries :: Env -> IO ()
 loadLibraries env = do
@@ -86,7 +88,7 @@ loadLibraries env = do
         then "lib\\stdlib.scm"
         else "lib/stdlib.scm"
     putStrLn $ "Loading stdlib from " ++ stdlib ++ "\n"
-    evalMString env $ "(load  \"" ++ (escapeBackslashes stdlib) ++ "\")"
+    evalString env $ "(load  \"" ++ (escapeBackslashes stdlib) ++ "\")"
 
 -- IO Functions
 
@@ -105,24 +107,24 @@ flushStr str = putStr str >> hFlush stdout
 
 -- Macro expansion and evaluation
 
-evalMPrint :: Env -> String -> IO ()
-evalMPrint env expr = evalMExpr env expr >>= putStrLn
+evalPrint :: Env -> String -> IO ()
+evalPrint env expr = evalExpr env expr >>= putStrLn
 
-evalMString :: Env -> String -> IO ()
-evalMString env expr = evalMExpr env expr >> return ()
+evalString :: Env -> String -> IO ()
+evalString env expr = evalExpr env expr >> return ()
 
-evalMExpr :: Env -> String -> IO String
-evalMExpr env expr = do
+evalExpr :: Env -> String -> IO String
+evalExpr env expr = do
     let parsedExpr = lift . liftThrows $ readExpr expr
     let evaledExpr = parsedExpr >>= meval
-    runIOThrows $ liftM show $ run evaledExpr env
+    --runIOThrows $ liftM show $ run evaledExpr env
 
-    --p <- runIOThrows $ liftM show $ run parsedExpr env
-    --putStrLn $ "***Reading: " ++ p
-    --e <- runIOThrows $ liftM show $ run evaledExpr env
-    --putStrLn $ "***Result:  " ++ e
+    p <- runIOThrows $ liftM show $ run parsedExpr env
+    putStrLn $ "***Reading: " ++ p
+    e <- runIOThrows $ liftM show $ run evaledExpr env
+    putStrLn $ "***Result:  " ++ e
     
-    --return e
+    return e
 
 -- Utility functions
 

@@ -43,6 +43,28 @@ popFromStack = getStack >>= \stackref -> do
 -- Functions to manipulate environments using a stack to store shadowed
 -- values - this is highly experimental!
 
+-- On further consideration, I think this is the wrong way to go about it.
+-- I originally introduced this functionality so that I could bind the val
+-- "it" inside an if statement and unbind it when we exit the statement
+-- and be able to restore any previously existing value of "it".
+
+-- The old approach was to just define "it" in the normal way, but that would
+-- overwrite any existing definition of "it" outside the if statement. We could
+-- create a new environment level for the if statement to operate in, but that
+-- has problems with defining variables - either we define them in the most
+-- local scope possible (but then they are lost when we exit the scope) or
+-- we define them in a higher scope (but we might have nested if statements - 
+-- in which case how high do we go?)
+
+-- I can think of two other solutions:
+--   (a) Have a special define statement that we only use in if statements, which
+--       figures out where to define its arguments.
+--   (b) Define some new kind of 'shadow' environment, in which definitions
+--       automatically percolate up to the higher levels, but bindings don't
+--       (i.e. we still have two definition operators, say 'define' and 'bind'
+--       but the details of how far they carry their values is taken care of
+--       by the environment itself.)
+
 pushIfBound :: Var -> EvalM ()
 pushIfBound var = do
     maybeVal <- getEnv >>= liftIO . localVarLookup var

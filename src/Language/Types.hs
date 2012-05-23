@@ -8,7 +8,7 @@ module Language.Types (
     , VectorType, HashType
     , Env (..), EnvType, Namespace, Var
     , ThrowsError, IOThrowsError
-    , EvalM, run, getEnv, getBindings, getStack, withEnv, inEnv
+    , EvalM, run, getEnv, getBindings, getStack, inEnv
     , errTypeMismatch, errNumArgs, errUser
     , unwordsList, pairs, unpairs
     , showVal, nil, eqv, truthVal, lispFalse, typeName, errorName, nullEnv
@@ -46,11 +46,8 @@ getEnv = ask
 getBindings = getEnv >>= return . bindings
 getStack    = getEnv >>= return . stack
 
-withEnv :: (Env -> Env) -> EvalM a -> EvalM a
-withEnv = local
-
 inEnv :: Env -> EvalM a -> EvalM a
-inEnv env = withEnv (const env)
+inEnv env = local (const env)
 
 run :: EvalM a -> Env -> IOThrowsError a
 run = runReaderT
@@ -118,7 +115,7 @@ showVal (Hash hash) = "#(" ++ unwordsList (unpairs $ zip (Map.keys hash) (Map.el
 showVal (PrimitiveFunc name _) = "<primitive:" ++ name ++ ">"
 showVal (IOFunc name _) = "<primitive:" ++ name ++ ">"
 showVal (EvalFunc name _) = "<primitive:" ++ name ++ ">"
-showVal (HFunc _ _ _ _) = "<haskellFunction>"
+showVal (HFunc { hparams = args, hvararg = varargs }) = showFunc "fn" args varargs
 showVal (Func { params = args, vararg = varargs }) = showFunc "fn" args varargs
 showVal (Port _) = "<IO port>"
 showVal (Exception e) = "<exception:" ++ errorName e ++ ">"

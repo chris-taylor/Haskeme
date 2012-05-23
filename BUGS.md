@@ -18,3 +18,5 @@
 * There are several bugs when you use multiple levels of quasiquote/unquote
 
 * `string->symbol` can be used to create illegal symbols (e.g. ones starting with #)
+
+* Defining a variable "it" inside an if statement has no effect
