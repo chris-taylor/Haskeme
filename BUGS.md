@@ -19,4 +19,9 @@
 
 * `string->symbol` can be used to create illegal symbols (e.g. ones starting with #)
 
-* Defining a variable "it" inside an if statement has no effect
+* Doing exact division by zero produces a floating point error. Possible solutions:
+  1. A new rational type that handles Inf and NaN
+  2. Import GHC.Real to get access to the :% operator, and wrap all operations
+     on rationals to detect the special cases
+  3. Detect the error when doing the division, and throw a LispError (preferred)
+

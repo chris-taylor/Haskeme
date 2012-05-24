@@ -13,12 +13,12 @@ import Language.Variables
 
 -- Combined expand and eval
 
-meval :: LispVal -> EvalM LispVal
+meval :: LispVal -> EvalM r LispVal
 meval form = expandAll form >>= eval 
 
 -- Evaluator
 
-eval :: LispVal -> EvalM LispVal
+eval :: LispVal -> EvalM r LispVal
 eval val@(String _)  = return val
 eval val@(Number _)  = return val
 eval val@(Char _)    = return val
@@ -40,23 +40,23 @@ eval (List (Atom "try" : args))         = evalTry args
 eval (List (function : args))           = evalApplication function args
 eval badForm = lift $ throwError $ BadSpecialForm "Unrecognized special form" badForm
 
-evalApplication :: LispVal -> [LispVal] -> EvalM LispVal
+evalApplication :: LispVal -> [LispVal] -> EvalM r LispVal
 evalApplication function args = do
     func <- meval function
     mapM meval args >>= apply func
 
-evalQuote :: [LispVal] -> EvalM LispVal
+evalQuote :: [LispVal] -> EvalM r LispVal
 evalQuote [val]   = return val
 evalQuote badArgs = lift $ errNumArgs 1 badArgs
 
-evalQQ :: Int -> LispVal -> EvalM LispVal
+evalQQ :: Int -> LispVal -> EvalM r LispVal
 evalQQ 0 val = meval val
 evalQQ n (List [Atom "quasiquote", val]) = evalQQ (n+1) val
 evalQQ n (List [Atom "unquote", val])    = evalQQ (n-1) val
 evalQQ n (List vals) = liftM (List . concat) $ mapM (evalQQList n) vals
 evalQQ n val = return val
 
-evalQQList :: Int -> LispVal -> EvalM [LispVal]
+evalQQList :: Int -> LispVal -> EvalM r [LispVal]
 evalQQList n (List [Atom "quasiquote", val]) = liftM return $ evalQQ (n+1) val
 evalQQList n (List [Atom "unquote", val])    = liftM return $ evalQQ (n-1) val
 evalQQList n (List [Atom "unquotesplicing", val]) = do
@@ -67,28 +67,22 @@ evalQQList n (List [Atom "unquotesplicing", val]) = do
 evalQQList n (List vals) = liftM (return . List . concat) $ mapM (evalQQList n) vals
 evalQQList n val = return $ return val
 
-evalIf :: [LispVal] -> EvalM LispVal
+evalIf :: [LispVal] -> EvalM r LispVal
 evalIf args@(test : rest) = do it <- meval test
-                               bindM ("it", it)
-                               evalIf' (truthVal it) rest
+                               env <- bind ("it", it)
+                               inEnv env $ evalIf' (truthVal it) rest
 
-evalIf' :: Bool -> [LispVal] -> EvalM LispVal
+evalIf' :: Bool -> [LispVal] -> EvalM r LispVal
 evalIf' truth [conseq]        = evalIf' truth [conseq, lispFalse]
-evalIf' truth [conseq, alt]   = if truth then evalU conseq else evalU alt
-evalIf' truth (conseq : rest) = if truth then evalU conseq else unbindM "it" >> evalIf rest
+evalIf' truth [conseq, alt]   = if truth then meval conseq else meval alt
+evalIf' truth (conseq : rest) = if truth then meval conseq else evalIf rest
 
-evalU :: LispVal -> EvalM LispVal
-evalU expr = do
-    result <- meval expr
-    unbindM "it"
-    return result
-
-evalFn :: LispVal -> [LispVal] -> EvalM LispVal
+evalFn :: LispVal -> [LispVal] -> EvalM r LispVal
 evalFn (List params) body = makeNormalFunc params body
 evalFn (DottedList params varargs) body = makeVarArgs varargs params body
 evalFn varargs@(Atom _) body = makeVarArgs varargs [] body
 
-evalDefine :: (String -> LispVal -> EvalM LispVal) -> LispVal -> [LispVal] -> EvalM LispVal
+evalDefine :: (String -> LispVal -> EvalM r LispVal) -> LispVal -> [LispVal] -> EvalM r LispVal
 evalDefine definer (Atom var) [form] = meval form >>= definer var
 evalDefine definer (Atom var) (List params : body) = 
     makeNormalFunc params body >>= definer var
@@ -97,7 +91,7 @@ evalDefine definer (Atom var) (DottedList params varargs : body) =
 evalDefine definer (Atom var) (varargs@(Atom _) : body) = 
     makeVarArgs varargs [] body >>= definer var
 
-evalSet :: [LispVal] -> EvalM LispVal
+evalSet :: [LispVal] -> EvalM r LispVal
 evalSet [Atom var, form] = meval form >>= setVar var
 evalSet [List [Atom "car", Atom var], form] = meval form >>= setCar var
 evalSet [List [Atom "cdr", Atom var], form] = meval form >>= setCdr var
@@ -107,13 +101,13 @@ evalSet [List [Atom var, form1], form2]     = do key <- meval form1
 evalSet [other, _] = lift $ errTypeMismatch "atom or list" other
 evalSet badArgs    = lift $ errNumArgs 2 badArgs
 
-evalTry :: [LispVal] -> EvalM LispVal
+evalTry :: [LispVal] -> EvalM r LispVal
 evalTry [expr, handler] = meval expr `catchError` \err ->
     meval handler >>= flip apply [Exception err]
 
 -- Macro expansion
 
-genericExpand :: (LispVal -> EvalM LispVal) -> LispVal -> EvalM LispVal
+genericExpand :: (LispVal -> EvalM r LispVal) -> LispVal -> EvalM r LispVal
 genericExpand continue val@(List (Atom name : args)) = do
     env <- getEnv
     result <- liftIO $ macRecLookup name env
@@ -124,38 +118,38 @@ genericExpand continue val@(List (Atom name : args)) = do
           (result)
 genericExpand _ val = return val
 
-expandOne :: LispVal -> EvalM LispVal
+expandOne :: LispVal -> EvalM r LispVal
 expandOne = genericExpand return
 
-expandAll :: LispVal -> EvalM LispVal
+expandAll :: LispVal -> EvalM r LispVal
 expandAll = genericExpand expandAll
 
 -- Helper functions to create user procedures
 
-makeFunc :: Maybe String -> [LispVal] -> [LispVal] -> EvalM LispVal
+makeFunc :: Maybe String -> [LispVal] -> [LispVal] -> EvalM r LispVal
 makeFunc varargs params body = do
     expandedBody <- mapM expandAll body
     getEnv >>= return . Func (map showVal params) varargs expandedBody
 
-makeNormalFunc :: [LispVal] -> [LispVal] -> EvalM LispVal
+makeNormalFunc :: [LispVal] -> [LispVal] -> EvalM r LispVal
 makeNormalFunc = makeFunc Nothing
 
-makeVarArgs :: LispVal -> [LispVal] -> [LispVal] -> EvalM LispVal
+makeVarArgs :: LispVal -> [LispVal] -> [LispVal] -> EvalM r LispVal
 makeVarArgs varargs = makeFunc (Just $ showVal varargs)
 
 -- Application
 
-apply :: LispVal -> [LispVal] -> EvalM LispVal
-apply (PrimitiveFunc _ func) args = lift $ liftThrows $ func args
-apply (IOFunc _ func) args        = lift $ func args
-apply (EvalFunc _ func) args      = func args
+apply :: LispVal -> [LispVal] -> EvalM r LispVal
+apply (PrimitiveFunc _ func) args = liftThrows $ func args
+apply (IOFunc _ func) args        = lift $ lift $ func args
+apply (EvalFunc _ func) args      = lift $ func args
 apply (Func  params varargs body closure) args = applyFunc params varargs body closure args
-apply (String str) args = lift $ applyString str args
-apply (Vector arr) args = lift $ applyVector arr args
-apply (Hash hash) args  = lift $ applyHash hash args
+apply (String str) args = lift $ lift $ applyString str args
+apply (Vector arr) args = lift $ lift $ applyVector arr args
+apply (Hash hash) args  = lift $ lift $ applyHash hash args
 apply other _ = lift $ errTypeMismatch "procedure, macro, string, vector or hash" other
 
-applyFunc :: [String] -> Maybe String -> [LispVal] -> Env -> [LispVal] -> EvalM LispVal
+applyFunc :: [String] -> Maybe String -> [LispVal] -> Env -> [LispVal] -> EvalM r LispVal
 applyFunc params varargs body closure args = inEnv closure' $
     if num params /= num args && varargs == Nothing
         then lift $ errNumArgs (num params) args

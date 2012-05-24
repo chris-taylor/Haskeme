@@ -27,32 +27,30 @@ primitiveBindings = nullEnv >>= (extendEnv $ map (makeFunc EvalFunc) evalPrimiti
                                           ++ map (makeFunc PrimitiveFunc) primitives)
     where makeFunc constructor (var, func) = (var, constructor var func)
 
--- Primitives that execute within the EvalM monad (can access the environment)
+-- Primitives that execute within the Eval monad (can access the environment)
 
-evalPrimitives :: [(String, [LispVal] -> EvalM LispVal)]
+evalPrimitives :: [(String, [LispVal] -> Eval LispVal)]
 evalPrimitives = [ ("apply", applyProc)
                  , ("eval", unaryEvalFunc meval)
                  , ("expand", unaryEvalFunc expandAll)
                  , ("expand1", unaryEvalFunc expandOne)
                  , ("load", unaryEvalFunc loadProc)
                  , ("dump-env", unaryEvalFunc dumpEnv)
-                 , ("bind", bindProc)
-                 , ("unbind", unaryEvalFunc unbindProc)
                  , ("hash-update", hashUpdate) ]
 
-unaryEvalFunc :: (LispVal -> EvalM LispVal) -> [LispVal] -> EvalM LispVal
+unaryEvalFunc :: (LispVal -> Eval LispVal) -> [LispVal] -> Eval LispVal
 unaryEvalFunc func [expr]  = func expr
 unaryEvalFunc func badArgs = lift $ errNumArgs 1 badArgs
 
-applyProc :: [LispVal] -> EvalM LispVal
+applyProc :: [LispVal] -> Eval LispVal
 applyProc [func, List args] = apply func args
 applyProc (func : args)     = apply func args
 
-loadProc :: LispVal -> EvalM LispVal
+loadProc :: LispVal -> Eval LispVal
 loadProc (String filename) = (lift $ load filename) >>= liftM last . mapM meval
 loadProc other             = lift $ errTypeMismatch "string" other
 
-dumpEnv :: LispVal -> EvalM LispVal
+dumpEnv :: LispVal -> Eval LispVal
 dumpEnv (String name) = do
     local <- getBindings >>= readRef
     let namespace = filter (\((n,_),_) -> n == name) (Map.toList local)
@@ -63,15 +61,6 @@ dumpEnv (String name) = do
             val <- readRef valRef
             liftIO $ putStrLn (var ++ " : " ++ show val)
 dumpEnv notString = lift $ errTypeMismatch "string" notString
-
-bindProc :: [LispVal] -> EvalM LispVal
-bindProc [Atom var, val] = bindM (var, val) >> return (Atom "ok")
-bindProc [notAtom, val]  = lift $ errTypeMismatch "atom" notAtom
-bindProc badArgs         = lift $ errNumArgs 2 badArgs
-
-unbindProc :: LispVal -> EvalM LispVal
-unbindProc (Atom var) = unbindM var >> return (Atom "ok")
-unbindProc notAtom    = lift $ errTypeMismatch "atom" notAtom
 
 -- Primitives that execute within the IOThrowsError monad (can perform I/O)
 
@@ -295,7 +284,7 @@ hashElem [key, Hash hash] = return $ Bool $ Map.member key hash
 hashElem [key, notHash]   = errTypeMismatch "hash" notHash
 hashElem badArgs          = errNumArgs 2 badArgs
 
-hashUpdate :: [LispVal] -> EvalM LispVal
+hashUpdate :: [LispVal] -> Eval LispVal
 hashUpdate [key, func, Hash hash] = if Map.member key hash
     then case typeName func of
         "procedure"  -> do

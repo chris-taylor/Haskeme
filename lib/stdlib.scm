@@ -466,6 +466,10 @@
   (fold (fn (old new) (if (< old new) old new))
     first rest))
 
+(def rounddp (n x)
+  (let pow10 (** 10 n)
+    (/ (round (* pow10 x)) pow10)))
+
 ;;;; Polymorphic fold (works on lists, vectors, strings)
 
 (def pfold_ (foldfunc f xs)
@@ -543,6 +547,10 @@
 (def raise-exception args
   (raise (apply new-exception args)))
 
+(macro handle args
+  `(fn (e)  ;; We are deliberately NOT using w/uniq, so that we bind e
+    (case (exception-type e) ,@args)))
+
 (macro assert (test . rest)
   `(if ,test 'ok
        (raise-exception 'assert ,@rest)))
@@ -553,6 +561,17 @@
 (macro assert-equal (fst snd . rest)
   `(assert (is ,fst ,snd) ,@rest))
 
+(macro assert-bound (arg . rest)
+  `(try (do ,arg 'ok)
+        (handle unboundvar (raise-exception 'assert ,@rest))))
+
+(macro assert-unbound (arg . rest)
+  `(try (do ,arg
+            (raise-exception 'assert ,@rest))
+        (handle
+          unboundvar 'ok
+          (raise e))))
+
 (macro w/handler (handler . exprs)
   `(try (do ,@exprs) ,handler))
 
@@ -562,10 +581,6 @@
         `(w/handler ,(car hs) ,@exprs)
         `(w/handler ,(car hs) ,(self (cdr hs)))))
    handlers))
-
-(macro handler args
-  `(fn (e)  ;; We are deliberately NOT using w/uniq, so that we bind e
-    (case (exception-type e) ,@args)))
 
 ;;;; Association Lists
 
@@ -661,12 +676,13 @@
 ;;;; Tests
 
 (def test-handler
-  (handler  ;; Binds e to the exception received (see defn of handler above)
+  (handle  ;; Binds e to the exception received (see defn of handler above)
     assert (do
       (prn "Test failed: " (car (exception-args e)))
       (map [prn "  " _]    (cdr (exception-args e)))
       (prn)
       'fail)
+    ;; otherwise
     (do
       (prn "Unknown error: " (exception-type e))
       (map [prn "  " _]      (exception-args e))

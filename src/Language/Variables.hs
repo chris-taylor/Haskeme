@@ -2,7 +2,7 @@ module Language.Variables (
     defineVar, defineMacro, getVar, setVar,
     readRef,
     macRecLookup,
-    bindM, unbindM,
+    bind,
     extendEnv,
     setCar, setCdr, setIndex) where
 
@@ -10,110 +10,55 @@ import Control.Monad.Error
 
 import Data.IORef
 import Data.Array
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, fromJust)
 import qualified Data.Map as Map
 
 import Language.Types
 
 -- Lifting of IO operations to work within the EvalM monad
 
-newRef :: a -> EvalM (IORef a)
-newRef = lift . lift . newIORef
+newRef :: a -> EvalM r (IORef a)
+newRef = liftIO . newIORef
 
-readRef :: IORef a -> EvalM a
-readRef = lift . lift . readIORef
+readRef :: IORef a -> EvalM r a
+readRef = liftIO . readIORef
 
-writeRef :: IORef a -> a -> EvalM ()
-writeRef ref = lift . lift . writeIORef ref
+writeRef :: IORef a -> a -> EvalM r ()
+writeRef ref = liftIO . writeIORef ref
 
-modifyRef :: (a -> a) -> IORef a -> EvalM ()
+modifyRef :: (a -> a) -> IORef a -> EvalM r ()
 modifyRef f ref = readRef ref >>= writeRef ref . f
 
-pushToStack :: IORef LispVal -> EvalM ()
-pushToStack val = getStack >>= modifyRef (val:)
-
-popFromStack :: EvalM (Maybe (IORef LispVal))
-popFromStack = getStack >>= \stackref -> do
-    stackval <- readRef stackref
-    if null stackval
-        then return Nothing
-        else do modifyRef tail stackref
-                return $ Just $ head stackval
-
 -- Functions to manipulate environments using a stack to store shadowed
--- values - this is highly experimental!
+-- values 
 
--- On further consideration, I think this is the wrong way to go about it.
--- I originally introduced this functionality so that I could bind the val
--- "it" inside an if statement and unbind it when we exit the statement
--- and be able to restore any previously existing value of "it".
-
--- The old approach was to just define "it" in the normal way, but that would
--- overwrite any existing definition of "it" outside the if statement. We could
--- create a new environment level for the if statement to operate in, but that
--- has problems with defining variables - either we define them in the most
--- local scope possible (but then they are lost when we exit the scope) or
--- we define them in a higher scope (but we might have nested if statements - 
--- in which case how high do we go?)
-
--- I can think of two other solutions:
---   (a) Have a special define statement that we only use in if statements, which
---       figures out where to define its arguments.
---   (b) Define some new kind of 'shadow' environment, in which definitions
---       automatically percolate up to the higher levels, but bindings don't
---       (i.e. we still have two definition operators, say 'define' and 'bind'
---       but the details of how far they carry their values is taken care of
---       by the environment itself.)
-
-pushIfBound :: Var -> EvalM ()
-pushIfBound var = do
-    maybeVal <- getEnv >>= liftIO . localVarLookup var
-    case maybeVal of
-        Just val -> pushToStack val
-        Nothing  -> return ()
-
-popIfBound :: Var -> EvalM ()
-popIfBound var = do
-    maybeVal <- popFromStack
-    case maybeVal of
-        Just val -> getBindings >>= modifyRef (varInsert var val)
-        Nothing  -> return ()
-
-bindM :: (Var, LispVal) -> EvalM ()
-bindM (var, val) = do
-    valRef <- newRef val
-    pushIfBound var
-    getBindings >>= modifyRef (varInsert var valRef)
-
-unbindM :: Var -> EvalM ()
-unbindM var = do
-    getBindings >>= modifyRef (varRemove var)
-    popIfBound var
+bind :: (Var, LispVal) -> EvalM r Env
+bind binding = getEnv >>= liftIO . extendEnvTmp [binding]
 
 -- Operations on environment implementation (i.e. underlying map)
 
 varNamespace = "v"
 macNamespace = "m"
 
-envIsBound :: Namespace -> Var -> EnvType -> Bool
+envIsBound :: Namespace -> Var -> Bindings -> Bool
 envIsBound namespace var env = Map.member (namespace, var) env
 
 envVarIsBound = envIsBound varNamespace
 envMacIsBound = envIsBound macNamespace
 
-envLookup :: Namespace -> Var -> EnvType -> Maybe (IORef LispVal)
+envLookup :: Namespace -> Var -> Bindings -> Maybe (IORef LispVal)
 envLookup namespace var env = Map.lookup (namespace, var) env
 
 varLookup = envLookup varNamespace
 macroLookup = envLookup macNamespace 
 
-envInsert :: Namespace -> Var -> IORef LispVal -> EnvType -> EnvType
+envInsert :: Namespace -> Var -> IORef LispVal -> Bindings -> Bindings
 envInsert namespace var val env = Map.insert (namespace, var) val env
 
 varInsert = envInsert varNamespace
 macroInsert = envInsert macNamespace
 
-envRemove :: Namespace -> Var -> EnvType -> EnvType
+envRemove :: Namespace -> Var -> Bindings -> Bindings
 envRemove namespace var env = Map.delete (namespace, var) env
 
 varRemove = envRemove varNamespace
@@ -159,7 +104,7 @@ recLookup ns var env = do
 varRecLookup = recLookup varNamespace
 macRecLookup = recLookup macNamespace
 
-get :: Namespace -> Var -> EvalM LispVal
+get :: Namespace -> Var -> EvalM r LispVal
 get namespace var = do
     env <- getEnv
     binds <- readRef (bindings env)
@@ -172,54 +117,49 @@ get namespace var = do
 getVar = get varNamespace
 getMacro = get macNamespace
 
-set :: Namespace -> String -> LispVal -> EvalM LispVal
+set :: Namespace -> String -> LispVal -> EvalM r LispVal
 set namespace var val = do
     env <- getEnv
     loc <- readRef (bindings env)
     maybe (case parent env of
             Nothing  -> throwError $ UnboundVar "Setting an unbound variable" var
             Just prt -> inEnv prt $ set namespace var val)
-          (lift . flip writeAndReturn val)
+          (lift . lift . flip writeAndReturn val)
           (envLookup namespace var loc)
     return val
 
 setVar = set varNamespace
 setMacro = set macNamespace
 
-define :: Namespace -> String -> LispVal -> EvalM LispVal
+define :: Namespace -> String -> LispVal -> EvalM r LispVal
 define namespace var value = do
     env <- getEnv
-    definedLocally <- liftIO $ isBound namespace var env
-    if definedLocally
-        then do liftIO $ putStrLn $ "*** redefining " ++ var
-                set namespace var value
+    if isTemp env -- only way to create a temp env is with mkTmpEnv, which requires a parent
+        then inEnv (fromJust $ parent env) $ define namespace var value
         else do
-            valueRef <- newRef value
-            binds    <- readRef (bindings env)
-            writeRef (bindings env) $ envInsert namespace var valueRef binds
-            return value
+            definedLocally <- liftIO $ isBound namespace var env
+            if definedLocally
+                then do liftIO $ putStrLn $ "*** redefining " ++ var
+                        set namespace var value
+                else do
+                    valueRef <- newRef value
+                    binds    <- readRef (bindings env)
+                    writeRef (bindings env) $ envInsert namespace var valueRef binds
+                    return value
 
 defineVar = define varNamespace
 defineMacro = define macNamespace
 
-extendEnv :: [ (Var, LispVal) ] -> Env -> IO Env
-extendEnv []    env = return env
-extendEnv binds env = mapM mkBind binds >>= newIORef . Map.fromList >>=
-    \bindings -> do
-        nullStack <- newIORef []
-        return $ Environment (Just env) nullStack bindings
+extendEnv' :: EnvExtender -> [(Var, LispVal)] -> Env -> IO Env
+extendEnv' make []    env = return env
+extendEnv' make binds env = mapM mkBind binds >>= newIORef . Map.fromList >>= return . make env
     where mkBind (var, val) = newIORef val >>=
-            ( \ref -> return (("v", var), ref) )
+            \ref -> return (("v", var), ref)
 
-bindVars :: Env -> [(String,LispVal)] -> IO Env
-bindVars = flip extendEnv
+extendEnv    = extendEnv' mkEnv
+extendEnvTmp = extendEnv' mkTmpEnv
 
-writeAndReturn :: IORef LispVal -> LispVal -> IOThrowsError LispVal
-writeAndReturn varRef val = do
-    liftIO $ writeIORef varRef val
-    return val
-
-setCar :: String -> LispVal -> EvalM LispVal
+setCar :: String -> LispVal -> EvalM r LispVal
 setCar var val = do
     env <- getEnv
     loc <- getBindings >>= readRef
@@ -229,31 +169,27 @@ setCar var val = do
           (\varRef -> do
             oldVal <- readRef varRef
             case oldVal of
-                List (_ : cdr)          -> lift $ setListCar varRef val cdr
-                DottedList (_ : cdr) tl -> lift $ setDottedListCar varRef val cdr tl
-                Vector arr              -> lift $ setVectorCar varRef val arr
-                String (_ : cdr)        -> lift $ setStringCar varRef val cdr
+                List (_ : cdr)          -> setListCar varRef val cdr
+                DottedList (_ : cdr) tl -> setDottedListCar varRef val cdr tl
+                Vector arr              -> setVectorCar varRef val arr
+                String (_ : cdr)        -> setStringCar varRef val cdr
                 other    -> errTypeMismatch "pair, vector or string" other)
           (varLookup var loc)
 
-setListCar :: IORef LispVal -> LispVal -> [LispVal] -> IOThrowsError LispVal
 setListCar varRef val cdr = writeAndReturn varRef $ List (val : cdr)
 
-setDottedListCar :: IORef LispVal -> LispVal -> [LispVal] -> LispVal -> IOThrowsError LispVal
 setDottedListCar varRef val cdr tl = writeAndReturn varRef $ DottedList (val : cdr) tl
 
-setVectorCar :: IORef LispVal -> LispVal -> VectorType -> IOThrowsError LispVal
 setVectorCar varRef val arr =
     let bds       = bounds arr
         (_ : cdr) = elems arr
     in writeAndReturn varRef $ Vector $ listArray bds (val : cdr) where
 
-setStringCar :: IORef LispVal -> LispVal -> String -> IOThrowsError LispVal
 setStringCar varRef val cdr = writeAndReturn varRef $ case val of
     Char c -> String (c : cdr)
     _      -> List (val : map Char cdr)
 
-setCdr :: String -> LispVal -> EvalM LispVal
+setCdr :: String -> LispVal -> EvalM r LispVal
 setCdr var val = do
     env <- getEnv
     loc <- getBindings >>= readRef
@@ -263,20 +199,18 @@ setCdr var val = do
           (\varRef -> do
             oldVal <- liftIO $ readIORef varRef
             case oldVal of
-                List (car : _)          -> lift $ setListCdr varRef car val
-                DottedList (car : _) _  -> lift $ setListCdr varRef car val
-                Vector arr              -> lift $ setVectorCdr varRef car val where car = arr ! 0
-                String (car : _)        -> lift $ setStringCdr varRef car val
+                List (car : _)          -> setListCdr varRef car val
+                DottedList (car : _) _  -> setListCdr varRef car val
+                Vector arr              -> setVectorCdr varRef car val where car = arr ! 0
+                String (car : _)        -> setStringCdr varRef car val
                 notPair -> errTypeMismatch "pair, vector or string" notPair)
           (varLookup var loc)
 
-setListCdr :: IORef LispVal -> LispVal -> LispVal -> IOThrowsError LispVal
 setListCdr varRef car val = writeAndReturn varRef (case val of
     List xs          -> List (car : xs)
     DottedList xs tl -> DottedList (car : xs) tl
     _                -> DottedList [car] val)
 
-setVectorCdr :: IORef LispVal -> LispVal -> LispVal -> IOThrowsError LispVal
 setVectorCdr varRef car val = writeAndReturn varRef (case val of
     Vector arr'      -> Vector $ listArray (0,n+1) (car : cdr) where
         (_, n) = bounds arr'
@@ -285,14 +219,13 @@ setVectorCdr varRef car val = writeAndReturn varRef (case val of
     DottedList xs tl -> DottedList (car : xs) tl
     _                -> DottedList [car] val)
 
-setStringCdr :: IORef LispVal -> Char -> LispVal -> IOThrowsError LispVal
 setStringCdr varRef car val = writeAndReturn varRef (case val of
     String xs        -> String (car : xs)
     List xs          -> List (Char car : xs)
     DottedList xs tl -> DottedList (Char car : xs) tl
     _                -> DottedList [Char car] val)
 
-setIndex :: String -> LispVal -> LispVal -> EvalM LispVal
+setIndex :: String -> LispVal -> LispVal -> EvalM r LispVal
 setIndex var index val = do
     env <- getEnv
     loc <- getBindings >>= readRef
@@ -302,27 +235,31 @@ setIndex var index val = do
           (\varRef -> do
             oldVal <- liftIO $ readIORef varRef
             case oldVal of
-                String str -> lift $ setStringIndex varRef str index val
-                Vector arr -> lift $ setVectorIndex varRef arr index val
-                Hash hash  -> lift $ setHashKey varRef hash index val
+                String str -> setStringIndex varRef str index val
+                Vector arr -> setVectorIndex varRef arr index val
+                Hash hash  -> setHashKey varRef hash index val
                 other -> errTypeMismatch "string, vector or hash" other)
           (varLookup var loc)
 
-setStringIndex :: IORef LispVal -> String -> LispVal -> LispVal -> IOThrowsError LispVal
 setStringIndex varRef str index val = case index of
     Number n -> case val of
         Char c  -> writeAndReturn varRef (String $ replaceAt n str c)
         notChar -> errTypeMismatch "char" notChar
     notInt   -> errTypeMismatch "integer" notInt
 
-replaceAt :: Integer -> [a] -> a -> [a]
-replaceAt n lst val = xs ++ val:ys where
-    (xs, _:ys) = splitAt (fromInteger n) lst
-
-setVectorIndex :: IORef LispVal -> VectorType -> LispVal -> LispVal -> IOThrowsError LispVal
 setVectorIndex varRef arr index val = case index of
     Number n -> writeAndReturn varRef (Vector $ arr // [(fromInteger n, val)])
     notInt   -> errTypeMismatch "integer" notInt
 
-setHashKey :: IORef LispVal -> HashType -> LispVal -> LispVal -> IOThrowsError LispVal
 setHashKey varRef hash key val = writeAndReturn varRef (Hash $ Map.insert key val hash)
+
+-- Helper Functions
+
+writeAndReturn :: (MonadIO m) => IORef LispVal -> LispVal -> m LispVal
+writeAndReturn varRef val = do
+    liftIO $ writeIORef varRef val
+    return val
+
+replaceAt :: Integer -> [a] -> a -> [a]
+replaceAt n lst val = xs ++ val:ys where
+    (xs, _:ys) = splitAt (fromInteger n) lst

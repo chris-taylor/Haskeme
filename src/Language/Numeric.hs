@@ -39,6 +39,11 @@ numericPrimitives =
     , ("/", fractionalBinOp (/))
     , ("^", numericIntegralBinOp (^))
     , ("abs", numericUnOp abs)
+    , ("signum", numericUnOp signum)
+    , ("round", realFracUnOp round)
+    , ("floor", realFracUnOp floor)
+    , ("ceil", realFracUnOp ceiling)
+    , ("truncate", realFracUnOp truncate)
     , ("sin", floatingUnOp sin)
     , ("cos", floatingUnOp cos)
     , ("tan", floatingUnOp tan)
@@ -230,6 +235,10 @@ numericOrdOp op params = case params of
                             else return res
     where newOp = promoteNumericOrdOp op
 
+realFracUnOp :: (forall a. (RealFrac a) => a -> Integer) -> [LispVal] -> ThrowsError LispVal
+realFracUnOp op [arg] = promoteRealFracUnaryOp op arg >>= pushDown
+roundinfUnOp op args  = errNumArgs 1 args
+
 integralBinOp :: (forall a. Integral a => a -> a -> a) -> [LispVal] -> ThrowsError LispVal
 integralBinOp op params = foldLeft1Error (promoteIntegralBinaryOp op) params
 
@@ -280,6 +289,13 @@ promoteNumericOrdOp op x y = case numType x `max` numType y of
     RatioType -> return $ Bool (asRatio x `op` asRatio y)
     FloatType -> return $ Bool (asFloat x `op` asFloat y)
     _         -> throwError $ TypeMismatch "int, rational or float" y
+
+promoteRealFracUnaryOp :: (forall a. (RealFrac a) => a -> Integer) -> LispVal -> ThrowsError LispVal
+promoteRealFracUnaryOp op x = case numType x of
+    IntType   -> return $ Number (op $ asRatio x)
+    RatioType -> return $ Number (op $ asRatio x)
+    FloatType -> return $ Number (op $ asFloat x)
+    otherwise -> errTypeMismatch "integer, rational or real" x
 
 promoteIntegralBinaryOp :: (forall a. Integral a => a -> a -> a) -> LispVal -> LispVal -> ThrowsError LispVal
 promoteIntegralBinaryOp op x y = case (numType x, numType y) of

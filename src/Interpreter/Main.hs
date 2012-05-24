@@ -2,8 +2,6 @@ module Main where
 
 import System.Environment
 import Control.Monad.Error
---import Control.Monad.Reader
---import Control.Monad.State
 import System.IO
 import System.Info
 import Data.IORef
@@ -117,14 +115,14 @@ evalExpr :: Env -> String -> IO String
 evalExpr env expr = do
     let parsedExpr = lift . liftThrows $ readExpr expr
     let evaledExpr = parsedExpr >>= meval
-    --runIOThrows $ liftM show $ run evaledExpr env
+    runIOThrows $ liftM show $ run evaledExpr env
 
-    p <- runIOThrows $ liftM show $ run parsedExpr env
-    putStrLn $ "***Reading: " ++ p
-    e <- runIOThrows $ liftM show $ run evaledExpr env
-    putStrLn $ "***Result:  " ++ e
+    --p <- runIOThrows $ liftM show $ run parsedExpr env
+    --putStrLn $ "***Reading: " ++ p
+    --e <- runIOThrows $ liftM show $ run evaledExpr env
+    --putStrLn $ "***Result:  " ++ e
     
-    return e
+    --return e
 
 -- Utility functions
 

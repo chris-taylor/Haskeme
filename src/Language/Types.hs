@@ -1,17 +1,17 @@
 {-# LANGUAGE NoMonomorphismRestriction, TypeSynonymInstances,
     FlexibleInstances, FlexibleContexts, MultiParamTypeClasses,
-    FunctionalDependencies #-}
+    FunctionalDependencies, Rank2Types, UndecidableInstances #-}
 
 module Language.Types (
       LispVal (..)
     , LispError (..)
     , VectorType, HashType
-    , Env (..), EnvType, Namespace, Var
-    , ThrowsError, IOThrowsError
-    , EvalM, run, getEnv, getBindings, getStack, inEnv
+    , Env (parent,bindings,isTemp), EnvExtender, Bindings, Namespace, Var
+    , ThrowsError, IOThrowsError, Eval
+    , EvalM, run, getEnv, getBindings, inEnv
     , errTypeMismatch, errNumArgs, errUser
     , unwordsList, pairs, unpairs
-    , showVal, nil, eqv, truthVal, lispFalse, typeName, errorName, nullEnv
+    , showVal, nil, eqv, truthVal, lispFalse, typeName, errorName, nullEnv, mkEnv, mkTmpEnv
     , showError, trapError, extractValue, liftThrows, runIOThrows, runIOThrowsCompile
     ) where
 
@@ -22,43 +22,55 @@ import qualified Data.Map as Map
 import Ratio
 import Complex
 import Control.Monad.Error
+import Control.Monad.Cont
 import Text.ParserCombinators.Parsec (ParseError)
 
---import Control.Monad.State
 import Control.Monad.Reader
 
 type Namespace = String
 type Var = String
 
-type EnvType = Map.Map (Namespace, Var) (IORef LispVal)
+type Bindings = Map.Map (Namespace, Var) (IORef LispVal)
+type EnvExtender = Env -> IORef Bindings -> Env
 
 data Env = Environment { parent :: Maybe Env
-                       , stack :: IORef [IORef LispVal]
-                       , bindings :: IORef EnvType }
+                       , isTemp :: Bool
+                       , bindings :: IORef Bindings }
 
---- ReaderT monad transformer -- EXPERIMENTAL
+mkEnv :: Env -> IORef Bindings -> Env
+mkEnv parent bindings = Environment (Just parent) False bindings
 
-type EvalM = ReaderT Env IOThrowsError
+mkTmpEnv :: Env -> IORef Bindings -> Env
+mkTmpEnv parent bindings = Environment (Just parent) True bindings
 
-getEnv :: EvalM Env
+nullEnv :: IO Env
+nullEnv = newIORef Map.empty >>= return . Environment Nothing False
+
+--- ContT and ReaderT monad transformers layered on top of IOThrowsError
+
+type Eval = ReaderT Env IOThrowsError
+
+type EvalM r = ContT r Eval
+
+getEnv :: EvalM r Env
 getEnv = ask
 
 getBindings = getEnv >>= return . bindings
-getStack    = getEnv >>= return . stack
 
-inEnv :: Env -> EvalM a -> EvalM a
+inEnv :: Env -> EvalM r a -> EvalM r a
 inEnv env = local (const env)
 
-run :: EvalM a -> Env -> IOThrowsError a
-run = runReaderT
+run :: EvalM a a -> Env -> IOThrowsError a
+run lisp env = runReaderT (runContT lisp return) env
 
----
+--- Let's make the ContT transformer an instance of MonadError
 
-nullEnv :: IO Env
-nullEnv = do
-    nullBindings <- newIORef Map.empty
-    nullStack    <- newIORef []
-    return $ Environment Nothing nullStack nullBindings
+instance MonadError e m => MonadError e (ContT r m) where
+    throwError = lift . throwError
+    catchError op h = ContT $ \k ->
+        runContT op k `catchError` \e -> runContT (h e) k
+
+--- Lisp data types
 
 type VectorType = Array Int LispVal
 type HashType = Map.Map LispVal LispVal
@@ -77,7 +89,7 @@ data LispVal = Atom String
              | Bool Bool
              | PrimitiveFunc String ([LispVal] -> ThrowsError LispVal)
              | IOFunc String ([LispVal] -> IOThrowsError LispVal)
-             | EvalFunc String ([LispVal] -> EvalM LispVal)
+             | EvalFunc String ([LispVal] -> Eval LispVal)
              | Func { params :: [Var]
                     , vararg :: Maybe Var
                     , body :: [LispVal]
@@ -249,7 +261,7 @@ extractValue :: ThrowsError a -> a
 extractValue (Right val) = val
 extractValue (Left err)  = error "Unexpected error in extractValue"
 
-liftThrows :: ThrowsError a -> IOThrowsError a
+liftThrows :: (MonadIO m, MonadError LispError m) => ThrowsError a -> m a
 liftThrows (Left err)  = throwError err
 liftThrows (Right val) = return val
 
@@ -273,13 +285,16 @@ runIOThrowsCompile action = do
 -- debug capability then those pragmas don't need to be there.
 
 instance Show Env where
-    show _ = "<environment>"
+    show _ = "<closure>"
 
 instance Show ([LispVal] -> ThrowsError LispVal) where
-    show _ = "<primitive>"
+    show _ = "<body>"
 
 instance Show ([LispVal] -> IOThrowsError LispVal) where
-    show _ = "<ioPrimitive>"
+    show _ = "<body>"
+
+instance forall r. Show ([LispVal] -> EvalM r LispVal) where
+    show _ = "<body>"
 
 -- Truth values (used in 'if special form)
 
@@ -294,7 +309,8 @@ truthVal (Float 0)    = False
 truthVal (Complex 0)  = False
 truthVal (String "")  = False
 truthVal (List [])    = False
-truthVal (Vector arr) = let (_, n) = bounds arr in n > 0
+truthVal (Vector arr) = let (_, n) = bounds arr in n > -1
+truthVal (Hash hash)  = not . null $ Map.elems hash
 truthVal _            = True
     
 -- Equivalance of LispVals (for use as keys in a hash)
